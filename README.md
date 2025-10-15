@@ -1,70 +1,97 @@
-# Grabadora Intento 4
+# Transcriptor de FERIA
 
-Aplicación de línea de comandos enfocada en grabar audio de forma eficiente, con controles formales de licencia y un descargo de responsabilidad claro para el usuario final.
+Aplicación de escritorio y CLI construida sobre `faster-whisper` pensada para lanzar transcripciones en lote de forma elegante, rápida y apta para usuarios no técnicos.
 
 ## Características principales
 
-- Grabación de audio en PCM lineal con escritura incremental a disco para minimizar el uso de memoria.
-- Verificación opcional de licencias con firmas HMAC para distribuir la aplicación de forma controlada.
-- Descargo de responsabilidad detallado que debe aceptarse antes de iniciar la grabación.
-- Interfaz de línea de comandos construida con Typer y Rich para ofrecer una experiencia moderna, localizable y rápida.
+- 🎚️ **Interfaz moderna** con modo oscuro/claro, cola de archivos, arrastrar y soltar y efecto "máquina de escribir" con velocidad regulable.
+- ⚡ **Optimizado**: carga una única instancia de modelo `faster-whisper`, auto-detecta GPU/CPU y guarda TXT/SRT simultáneamente.
+- 🛡️ **Licenciamiento HMAC** y descargo de responsabilidad persistente listo para distribuir a terceros.
+- 📝 **Corrección opcional** con `language-tool-python` y exportación acumulada por carpeta.
+- 🛠️ **CLI administrativa** para emitir/verificar licencias y lanzar la GUI.
+- 💼 **Empaquetado** sencillo en `.exe` con PyInstaller para venta o redistribución controlada.
 
-## Instalación paso a paso (para cualquier persona)
-
-1. **Instala Python 3.9 o superior** desde [python.org](https://www.python.org/downloads/). En Windows marca la casilla *Add Python to PATH* durante el instalador.
-2. **Descarga este proyecto** desde GitHub pulsando en `Code → Download ZIP`. Descomprime la carpeta donde quieras guardarlo.
-3. **Instala la aplicación**:
-   - Windows: abre PowerShell en la carpeta descomprimida y ejecuta `py -m pip install --upgrade pip` seguido de `py -m pip install -e .`.
-   - macOS/Linux: abre Terminal, sitúate en la carpeta (`cd /ruta/al/proyecto`) y ejecuta `python3 -m pip install --upgrade pip` seguido de `python3 -m pip install -e .`.
-4. Tras la instalación se crean dos comandos nuevos: `grabadora` (modo profesional por consola) y `grabadora-gui` (modo gráfico, pensado para personas no técnicas).
-
-## Guía rápida para el modo gráfico
-
-```bash
-# Lanzar la aplicación con botones
-grabadora-gui
-```
-
-1. Aparecerá una ventana con el descargo de responsabilidad. Léelo y marca la casilla de aceptación.
-2. Usa **Explorar...** para elegir dónde se guardará el archivo WAV.
-3. Opcional: ajusta la duración automática. Deja `0` si prefieres detener la grabación manualmente.
-4. Pulsa **Iniciar grabación** y, cuando termines, pulsa **Detener**. El estado en la parte inferior mostrará el tiempo grabado y la ruta del archivo.
-
-> Consejo: En Windows puedes crear un acceso directo que ejecute `py -m grabadora.gui` para que el usuario solo haga doble clic.
-
-## Uso rápido por consola
-
-```bash
-# Mostrar ayuda general
-grabadora --help
-
-# Crear un nuevo archivo de licencia
-grabadora licencia emitir --nombre "Nombre Apellido" --correo usuario@example.com --dias 30 --clave-secreta "CLAVE_SUPER_SECRETA"
-
-# Validar una licencia
-grabadora licencia verificar --archivo licencia.json --clave-secreta "CLAVE_SUPER_SECRETA"
-
-# Iniciar una grabación de audio (48 kHz, estéreo)
-grabadora grabar --duracion 30 --salida output.wav
-```
-
-> **Nota importante**: esta aplicación no distribuye códecs propietarios. Se apoya únicamente en dependencias de código abierto. Verifica la legislación local antes de grabar conversaciones; el usuario es el único responsable del uso que le dé a la herramienta.
-
-## Requisitos del sistema
+## Requisitos
 
 - Python 3.9 o superior.
-- Controlador de audio compatible con PortAudio.
-- Permisos de lectura/escritura en el directorio donde se almacenen las grabaciones.
+- Para aceleración por GPU: CUDA disponible (opcional, la aplicación realiza fallback automático a CPU).
+- FFmpeg disponible en el PATH si se quieren convertir formatos adicionales (la app detecta un binario empacado en `src/transcriptor/ffmpeg/ffmpeg.exe` si se incluye al crear el instalador).
 
-## Desarrollo
+## Instalación para pruebas
 
-Ejecuta los chequeos de formato y tipado con:
+1. Crea y activa un entorno virtual (recomendado).
+2. Instala la aplicación en modo editable:
+
+   ```bash
+   python -m pip install --upgrade pip
+   python -m pip install -e .
+   ```
+
+3. Verifica que los comandos están disponibles:
+
+   ```bash
+   transcriptor version
+   transcriptor gui  # Abre la interfaz
+   ```
+
+Si estás en Windows y deseas soporte de arrastrar/soltar, instala adicionalmente `pip install tkinterdnd2` (ya se marca como dependencia condicional en Windows, pero los binarios de `tk` de algunas distribuciones lo omiten).
+
+## Uso de la interfaz gráfica
+
+1. Inicia con `transcriptor gui` o desde el acceso directo que generes.
+2. Acepta el descargo de responsabilidad la primera vez.
+3. Importa una licencia válida (menú **Licencia → Importar**). Sin licencia, la cola permanece deshabilitada.
+4. Añade audios con el botón **Agregar audios** o arrastrándolos a la lista.
+5. Elige destino (misma carpeta, preguntar o carpetas rápidas guardadas) y ajusta opciones del modelo.
+6. Pulsa **Procesar cola**. Podrás cancelar en caliente. El progreso se refleja en la barra gruesa y en el texto en vivo.
+7. Al terminar, la app abre un cuadro con las rutas TXT/SRT guardadas. También puedes copiar o guardar el texto mostrado.
+
+## Flujo de licencias
+
+Para generar licencias personalizadas utiliza la CLI:
 
 ```bash
-ruff check src
-mypy src
+transcriptor licencia-emitir --nombre "Nombre Apellido" --correo usuario@example.com --dias 30 --nota "Curso ABC" --salida licencia.json
 ```
 
----
+Se solicitará una clave secreta privada (no la compartas). Entrega el `licencia.json` y la clave correspondiente al cliente. En la GUI deberá importarla e introducir la clave para activarla. También puedes verificar licencias desde la terminal:
 
-© 2024 Grabadora Intento 4. Todos los derechos reservados.
+```bash
+transcriptor licencia-verificar --archivo licencia.json
+```
+
+La salida tendrá código de retorno 0 cuando la licencia sea válida.
+
+## Empaquetado a `.exe`
+
+1. Instala PyInstaller:
+
+   ```bash
+   python -m pip install pyinstaller
+   ```
+
+2. Genera el ejecutable de un solo archivo:
+
+   ```bash
+   pyinstaller -F -w --add-data "src/transcriptor/models;transcriptor/models" \
+              --add-data "src/transcriptor/ffmpeg/ffmpeg.exe;transcriptor/ffmpeg" \
+              -n "TranscriptorFeria" -c transcriptor/gui.py
+   ```
+
+   - `-w` oculta la consola.
+   - Los parámetros `--add-data` permiten incluir modelos precargados y FFmpeg si los tienes preparados. Adáptalos según tu estructura.
+   - Genera el ejecutable en `dist/TranscriptorFeria.exe` listo para distribuir con tu licencia y descargo.
+
+3. Opcional: crea un instalador MSI con herramientas como Inno Setup o WiX, incluyendo la carpeta de modelos.
+
+## Registro y logs
+
+Los logs rotativos se almacenan en `%APPDATA%/Transcriptor/logs/app.log` (Windows) o `~/.Transcriptor/logs/app.log` en sistemas Unix.
+
+## Desarrollo rápido
+
+- Ejecuta la GUI en caliente: `python -m transcriptor.gui`.
+- Lanza la CLI Typer en modo ayuda: `transcriptor --help`.
+- Valida la sintaxis: `python -m compileall src`.
+
+¡Disfruta de un flujo de transcripción robusto y listo para licenciar!
