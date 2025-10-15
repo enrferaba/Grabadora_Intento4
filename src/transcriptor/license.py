@@ -93,3 +93,18 @@ def save_license(blob: Dict[str, Any], path: Path) -> None:
 
 def load_license(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def extract_payload(blob: Dict[str, Any]) -> Optional[LicensePayload]:
+    payload = blob.get("payload")
+    if isinstance(payload, dict):
+        try:
+            return LicensePayload.from_dict(payload)
+        except Exception:
+            return None
+    return None
+
+
+def license_is_active(blob: Dict[str, Any]) -> bool:
+    payload = extract_payload(blob)
+    return payload.is_valid() if payload else False

@@ -1,6 +1,6 @@
 [project]
 name = "transcriptor-feria"
-version = "2.0.0"
+version = "2.0.1"
 description = "Transcriptor de FERIA: GUI oscura y clara, licencias HMAC y motor faster-whisper listo para empaquetar en .exe."
 authors = [
   { name = "Transcriptor Team" }

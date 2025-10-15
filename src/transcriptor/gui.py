@@ -13,7 +13,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from .config import ConfigManager, PATHS
 from .disclaimer import DISCLAIMER_TEXT, disclaimer_with_signature, timestamp
-from .license import load_license, save_license, verify_license
+from .license import extract_payload, license_is_active, load_license, save_license, verify_license
 from .logging_utils import configure_logging
 from .theme import get_theme
 from .transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
@@ -168,6 +168,7 @@ class TranscriptorApp:
         self.cancel_event = threading.Event()
         self.transcribing = False
         self.license_secret: Optional[str] = None
+        self.license_active = False
 
         self._build_menu()
         self._build_layout()
@@ -395,12 +396,51 @@ class TranscriptorApp:
     def _load_license_from_config(self) -> None:
         blob = self.cfg.license_blob()
         if not blob:
-            self._update_license_label(False)
+            self._deactivate_license(clear_blob=False)
+            return
+
+        secret = self.cfg.license_secret()
+        if secret and verify_license(blob, secret):
+            self._activate_license(blob, secret, inform=False)
         else:
-            signature = blob.get("signature")
-            holder = blob.get("payload", {}).get("holder")
-            expires = blob.get("payload", {}).get("expires_at")
-            self._update_license_label(True, holder, expires, signature)
+            self._deactivate_license(clear_blob=True)
+            if blob:
+                def _warn() -> None:
+                    if license_is_active(blob):
+                        text = "La licencia guardada no se pudo verificar. Reimpórtala e introduce la clave correcta."
+                    else:
+                        text = "La licencia guardada expiró o es inválida. Solicita una nueva licencia para continuar."
+                    messagebox.showwarning("Licencia", text)
+
+                self.root.after(200, _warn)
+
+    def _activate_license(self, blob: dict, secret: str, inform: bool = True) -> bool:
+        if not verify_license(blob, secret):
+            return False
+
+        payload = extract_payload(blob)
+        holder = payload.holder if payload else blob.get("payload", {}).get("holder")
+        expires = payload.expires_at if payload else blob.get("payload", {}).get("expires_at")
+        signature = blob.get("signature") if isinstance(blob.get("signature"), str) else None
+
+        self.cfg.set_license_blob(blob)
+        self.cfg.set_license_secret(secret)
+        self.license_secret = secret
+        self.license_active = True
+        self._update_license_label(True, holder, expires, signature)
+        self._update_process_button()
+
+        if inform:
+            messagebox.showinfo("Licencia", "Licencia activada correctamente.")
+        return True
+
+    def _deactivate_license(self, *, clear_blob: bool = False) -> None:
+        if clear_blob:
+            self.cfg.set_license_blob(None)
+        self.cfg.set_license_secret(None)
+        self.license_secret = None
+        self.license_active = False
+        self._update_license_label(False)
         self._update_process_button()
 
     def _update_license_label(self, valid: bool, holder: Optional[str] = None, expires: Optional[str] = None, signature: Optional[str] = None) -> None:
@@ -423,17 +463,9 @@ class TranscriptorApp:
         secret = simpledialog.askstring("Clave de activación", "Introduce la clave de activación proporcionada:", parent=self.root, show="*")
         if not secret:
             return
-        if verify_license(blob, secret):
-            self.cfg.set_license_blob(blob)
-            self.license_secret = secret
-            payload = blob.get("payload", {})
-            self._update_license_label(True, payload.get("holder"), payload.get("expires_at"), blob.get("signature"))
-            messagebox.showinfo("Licencia", "Licencia activada correctamente.")
-            self._update_process_button()
-        else:
-            self._update_license_label(False)
-            messagebox.showerror("Licencia", "No se pudo verificar la licencia. Comprueba la clave.")
-            self._update_process_button()
+        if not self._activate_license(blob, secret):
+            messagebox.showerror("Licencia", "No se pudo verificar la licencia. Comprueba la clave o solicita una nueva.")
+            self._load_license_from_config()
 
     def _export_license(self) -> None:
         blob = self.cfg.license_blob()
@@ -524,9 +556,9 @@ class TranscriptorApp:
         self._update_process_button()
 
     def _update_process_button(self) -> None:
-        enabled = bool(self.queue and self.cfg.license_blob())
+        enabled = bool(self.queue and self.license_active)
         self.process_btn.config(state=tk.NORMAL if enabled else tk.DISABLED)
-        if not self.cfg.license_blob():
+        if not self.license_active:
             self.status_label.config(text="Estado: importe una licencia para comenzar", foreground="red")
         elif not self.transcribing:
             base_color = get_theme(self.cfg.theme()).color("text")
@@ -608,7 +640,7 @@ class TranscriptorApp:
 
     # ------------------------------------------------------------------
     def _start_queue(self) -> None:
-        if not self.queue or not self.cfg.license_blob():
+        if not self.queue or not self.license_active:
             return
         self.transcribing = True
         self.cancel_event.clear()

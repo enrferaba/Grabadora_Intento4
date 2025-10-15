@@ -6,7 +6,7 @@ Aplicación de escritorio y CLI construida sobre `faster-whisper` pensada para l
 
 - 🎚️ **Interfaz moderna** con modo oscuro/claro, cola de archivos, arrastrar y soltar y efecto "máquina de escribir" con velocidad regulable.
 - ⚡ **Optimizado**: carga una única instancia de modelo `faster-whisper`, auto-detecta GPU/CPU y guarda TXT/SRT simultáneamente.
-- 🛡️ **Licenciamiento HMAC** y descargo de responsabilidad persistente listo para distribuir a terceros.
+- 🛡️ **Licenciamiento HMAC** y descargo de responsabilidad persistente listo para distribuir a terceros. La clave de activación puede recordarse localmente para que el cliente solo tenga que introducirla una vez.
 - 📝 **Corrección opcional** con `language-tool-python` y exportación acumulada por carpeta.
 - 🛠️ **CLI administrativa** para emitir/verificar licencias y lanzar la GUI.
 - 💼 **Empaquetado** sencillo en `.exe` con PyInstaller para venta o redistribución controlada.
@@ -54,7 +54,7 @@ Para generar licencias personalizadas utiliza la CLI:
 transcriptor licencia-emitir --nombre "Nombre Apellido" --correo usuario@example.com --dias 30 --nota "Curso ABC" --salida licencia.json
 ```
 
-Se solicitará una clave secreta privada (no la compartas). Entrega el `licencia.json` y la clave correspondiente al cliente. En la GUI deberá importarla e introducir la clave para activarla. También puedes verificar licencias desde la terminal:
+Se solicitará una clave secreta privada (no la compartas). Entrega el `licencia.json` y la clave correspondiente al cliente. En la GUI deberá importarla e introducir la clave para activarla (se guarda codificada localmente para que el usuario no tenga que repetirla). También puedes verificar licencias desde la terminal:
 
 ```bash
 transcriptor licencia-verificar --archivo licencia.json
@@ -73,9 +73,10 @@ La salida tendrá código de retorno 0 cuando la licencia sea válida.
 2. Genera el ejecutable de un solo archivo:
 
    ```bash
-   pyinstaller -F -w --add-data "src/transcriptor/models;transcriptor/models" \
-              --add-data "src/transcriptor/ffmpeg/ffmpeg.exe;transcriptor/ffmpeg" \
-              -n "TranscriptorFeria" -c transcriptor/gui.py
+   pyinstaller -F -w src/transcriptor/gui.py \
+     --name "TranscriptorFeria" \
+     --add-data "src/transcriptor/models;transcriptor/models" \
+     --add-data "src/transcriptor/ffmpeg/ffmpeg.exe;transcriptor/ffmpeg"
    ```
 
    - `-w` oculta la consola.
@@ -83,6 +84,13 @@ La salida tendrá código de retorno 0 cuando la licencia sea válida.
    - Genera el ejecutable en `dist/TranscriptorFeria.exe` listo para distribuir con tu licencia y descargo.
 
 3. Opcional: crea un instalador MSI con herramientas como Inno Setup o WiX, incluyendo la carpeta de modelos.
+
+## Entrega a usuarios finales
+
+1. **Prepara la carpeta** con el `TranscriptorFeria.exe`, el archivo `licencia.json` emitido para ese cliente y un documento `LEEME.txt` con las instrucciones.
+2. **Comparte la clave de activación** por un canal seguro diferente (por ejemplo, mensaje privado o llamada). Esa clave es la que usaste al emitir la licencia.
+3. El usuario final solo debe ejecutar el `.exe`, aceptar el descargo, ir al menú **Licencia → Importar licencia…**, elegir el archivo `licencia.json` que le entregaste e introducir la clave. La aplicación recordará la clave localmente y comprobará la caducidad de la licencia en cada inicio.
+4. Si la licencia caduca, la interfaz bloquea la cola y muestra un aviso para que solicite una nueva; basta con reemplazar el archivo de licencia y repetir la importación.
 
 ## Registro y logs
 

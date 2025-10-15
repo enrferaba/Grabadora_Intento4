@@ -1,6 +1,7 @@
 """Persistent configuration helpers for Transcriptor de FERIA."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 from dataclasses import dataclass
@@ -56,6 +57,7 @@ class ConfigManager:
         "theme": "dark",
         "disclaimer_ack_at": None,
         "license": None,
+        "license_secret": None,
     }
 
     def __init__(self, path: Path) -> None:
@@ -140,6 +142,23 @@ class ConfigManager:
 
     def set_license_blob(self, blob: Optional[Dict[str, Any]]) -> None:
         self._data["license"] = blob
+        self.save()
+
+    def license_secret(self) -> Optional[str]:
+        encoded = self._data.get("license_secret")
+        if not isinstance(encoded, str) or not encoded:
+            return None
+        try:
+            return base64.b64decode(encoded.encode("utf-8")).decode("utf-8")
+        except Exception:
+            return None
+
+    def set_license_secret(self, secret: Optional[str]) -> None:
+        if secret:
+            encoded = base64.b64encode(secret.encode("utf-8")).decode("ascii")
+        else:
+            encoded = None
+        self._data["license_secret"] = encoded
         self.save()
 
 
