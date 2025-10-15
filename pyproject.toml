@@ -15,6 +15,7 @@ readme = "README.md"
 
 [project.scripts]
 grabadora = "grabadora.cli:app"
+grabadora-gui = "grabadora.gui:run"
 
 [build-system]
 requires = ["setuptools>=67", "wheel"]

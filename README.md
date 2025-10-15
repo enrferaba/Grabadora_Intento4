@@ -9,13 +9,30 @@ Aplicación de línea de comandos enfocada en grabar audio de forma eficiente, c
 - Descargo de responsabilidad detallado que debe aceptarse antes de iniciar la grabación.
 - Interfaz de línea de comandos construida con Typer y Rich para ofrecer una experiencia moderna, localizable y rápida.
 
-## Instalación
+## Instalación paso a paso (para cualquier persona)
+
+1. **Instala Python 3.9 o superior** desde [python.org](https://www.python.org/downloads/). En Windows marca la casilla *Add Python to PATH* durante el instalador.
+2. **Descarga este proyecto** desde GitHub pulsando en `Code → Download ZIP`. Descomprime la carpeta donde quieras guardarlo.
+3. **Instala la aplicación**:
+   - Windows: abre PowerShell en la carpeta descomprimida y ejecuta `py -m pip install --upgrade pip` seguido de `py -m pip install -e .`.
+   - macOS/Linux: abre Terminal, sitúate en la carpeta (`cd /ruta/al/proyecto`) y ejecuta `python3 -m pip install --upgrade pip` seguido de `python3 -m pip install -e .`.
+4. Tras la instalación se crean dos comandos nuevos: `grabadora` (modo profesional por consola) y `grabadora-gui` (modo gráfico, pensado para personas no técnicas).
+
+## Guía rápida para el modo gráfico
 
 ```bash
-pip install -e .
+# Lanzar la aplicación con botones
+grabadora-gui
 ```
 
-## Uso rápido
+1. Aparecerá una ventana con el descargo de responsabilidad. Léelo y marca la casilla de aceptación.
+2. Usa **Explorar...** para elegir dónde se guardará el archivo WAV.
+3. Opcional: ajusta la duración automática. Deja `0` si prefieres detener la grabación manualmente.
+4. Pulsa **Iniciar grabación** y, cuando termines, pulsa **Detener**. El estado en la parte inferior mostrará el tiempo grabado y la ruta del archivo.
+
+> Consejo: En Windows puedes crear un acceso directo que ejecute `py -m grabadora.gui` para que el usuario solo haga doble clic.
+
+## Uso rápido por consola
 
 ```bash
 # Mostrar ayuda general
