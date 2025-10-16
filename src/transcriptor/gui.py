@@ -11,12 +11,40 @@ from typing import Callable, Iterable, List, Optional
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from .config import ConfigManager, PATHS
-from .disclaimer import DISCLAIMER_TEXT, disclaimer_with_signature, timestamp
-from .license import extract_payload, license_is_active, load_license, save_license, verify_license
-from .logging_utils import configure_logging
-from .theme import get_theme
-from .transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+if __package__ in (None, ""):
+    if str(PACKAGE_ROOT) not in sys.path:
+        sys.path.insert(0, str(PACKAGE_ROOT))
+
+    from transcriptor.config import ConfigManager, PATHS  # type: ignore
+    from transcriptor.disclaimer import (  # type: ignore
+        DISCLAIMER_TEXT,
+        disclaimer_with_signature,
+        timestamp,
+    )
+    from transcriptor.license import (  # type: ignore
+        extract_payload,
+        license_is_active,
+        load_license,
+        save_license,
+        verify_license,
+    )
+    from transcriptor.logging_utils import configure_logging  # type: ignore
+    from transcriptor.theme import get_theme  # type: ignore
+    from transcriptor.transcription import (  # type: ignore
+        GrammarCorrector,
+        ModelProvider,
+        OutputWriter,
+        Segment,
+        Transcriber,
+    )
+else:
+    from .config import ConfigManager, PATHS
+    from .disclaimer import DISCLAIMER_TEXT, disclaimer_with_signature, timestamp
+    from .license import extract_payload, license_is_active, load_license, save_license, verify_license
+    from .logging_utils import configure_logging
+    from .theme import get_theme
+    from .transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
 
 logger = configure_logging()
 
