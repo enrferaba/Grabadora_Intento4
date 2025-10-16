@@ -89,7 +89,23 @@ class ConfigManager:
     # ------------------------------------------------------------------
     @property
     def folders(self) -> Dict[str, str]:
-        return dict(self._data.get("folders", {}))
+        raw = self._data.get("folders", {})
+        if not isinstance(raw, dict):
+            self._data["folders"] = {}
+            self.save()
+            return {}
+
+        valid: Dict[str, str] = {}
+        for alias, path_str in raw.items():
+            if not isinstance(alias, str):
+                continue
+            if not isinstance(path_str, str) or not path_str.strip():
+                continue
+            valid[alias] = path_str
+        if valid != raw:
+            self._data["folders"] = valid
+            self.save()
+        return valid
 
     def set_folder(self, alias: str, value: Path) -> None:
         folders = dict(self.folders)
