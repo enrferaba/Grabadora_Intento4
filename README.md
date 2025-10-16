@@ -40,10 +40,10 @@ Si estás en Windows y deseas soporte de arrastrar/soltar, instala adicionalment
 
 1. Inicia con `transcriptor gui` o desde el acceso directo que generes.
 2. Acepta el descargo de responsabilidad la primera vez.
-3. Importa una licencia válida (menú **Licencia → Importar**). Sin licencia, la cola permanece deshabilitada.
+3. Al arrancar, la app busca automáticamente un `licencia.json` en la carpeta del ejecutable y te pide la clave de activación en un cuadro oscuro. Si no lo encuentra, puedes importarlo desde el menú **Licencia → Importar**. Sin licencia, la cola permanece deshabilitada.
 4. Añade audios con el botón **Agregar audios** o arrastrándolos a la lista.
 5. Elige destino (misma carpeta, preguntar o carpetas rápidas guardadas) y ajusta opciones del modelo.
-6. Pulsa **Procesar cola**. Podrás cancelar en caliente. El progreso se refleja en la barra gruesa y en el texto en vivo.
+6. Pulsa **Procesar cola**. Podrás cancelar en caliente. El progreso se muestra en la barra gruesa con porcentaje numérico y el estado se actualiza en vivo.
 7. Al terminar, la app abre un cuadro con las rutas TXT/SRT guardadas. También puedes copiar o guardar el texto mostrado.
 
 ## Flujo de licencias
@@ -105,7 +105,7 @@ La salida tendrá código de retorno 0 cuando la licencia sea válida.
 
 1. **Prepara la carpeta** con el `TranscriptorFeria.exe`, el archivo `licencia.json` emitido para ese cliente y un documento `LEEME.txt` con las instrucciones.
 2. **Comparte la clave de activación** por un canal seguro diferente (por ejemplo, mensaje privado o llamada). Esa clave es la que usaste al emitir la licencia.
-3. El usuario final solo debe ejecutar el `.exe`, aceptar el descargo, ir al menú **Licencia → Importar licencia…**, elegir el archivo `licencia.json` que le entregaste e introducir la clave. La aplicación recordará la clave localmente y comprobará la caducidad de la licencia en cada inicio.
+3. El usuario final solo debe ejecutar el `.exe`, aceptar el descargo y, si el `licencia.json` está junto al ejecutable, la aplicación lo detectará y mostrará inmediatamente el cuadro para introducir la clave. También puede importarlo desde el menú **Licencia → Importar licencia…**. La aplicación recordará la clave localmente y comprobará la caducidad en cada inicio.
 4. Si la licencia caduca, la interfaz bloquea la cola y muestra un aviso para que solicite una nueva; basta con reemplazar el archivo de licencia y repetir la importación.
 
 ## Registro y logs
