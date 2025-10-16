@@ -89,6 +89,12 @@ La salida tendrá código de retorno 0 cuando la licencia sea válida.
 
      > En PowerShell también puedes usar el acento grave `` ` `` como separador de líneas si prefieres mantener el formato multilínea.
 
+     ```powershell
+     pyinstaller -F -w src/transcriptor/gui.py `
+       --name "TranscriptorFeria" `
+       --add-data "src/transcriptor/ffmpeg/ffmpeg.exe;transcriptor/ffmpeg"
+     ```
+
    - `-w` oculta la consola.
    - Los parámetros `--add-data` permiten incluir modelos precargados y FFmpeg si los tienes preparados. Adáptalos según tu estructura.
    - Genera el ejecutable en `dist/TranscriptorFeria.exe` listo para distribuir con tu licencia y descargo.
