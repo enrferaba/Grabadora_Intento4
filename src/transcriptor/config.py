@@ -6,7 +6,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 APP_NAME = "Transcriptor"
 
@@ -89,18 +89,77 @@ class ConfigManager:
     # ------------------------------------------------------------------
     @property
     def folders(self) -> Dict[str, str]:
-        return dict(self._data.get("folders", {}))
+        raw = self._data.get("folders", {})
+        if not isinstance(raw, dict):
+            self._data["folders"] = {}
+            self.save()
+            return {}
 
-    def set_folder(self, alias: str, value: Path) -> None:
+        valid: Dict[str, str] = {}
+        changed = False
+        for alias, path_str in raw.items():
+            if not isinstance(alias, str):
+                changed = True
+                continue
+
+            clean_alias = alias.strip()
+            if not clean_alias:
+                changed = True
+                continue
+
+            if clean_alias in valid and clean_alias != alias:
+                changed = True
+                continue
+
+            if not isinstance(path_str, str):
+                changed = True
+                continue
+
+            clean_path = path_str.strip()
+            if not clean_path:
+                changed = True
+                continue
+
+            try:
+                normalized_path = str(Path(clean_path).expanduser())
+            except Exception:
+                changed = True
+                continue
+
+            if normalized_path != clean_path or clean_alias != alias:
+                changed = True
+
+            valid[clean_alias] = normalized_path
+
+        if changed or valid != raw:
+            self._data["folders"] = valid
+            self.save()
+
+        return valid
+
+    def set_folder(self, alias: str, value: Union[str, Path]) -> None:
+        alias_clean = alias.strip()
+        if not alias_clean:
+            raise ValueError("El nombre no puede estar vacío.")
+
+        try:
+            path = Path(value).expanduser()
+        except Exception as exc:  # pragma: no cover - defensive
+            raise ValueError("Ruta inválida.") from exc
+
         folders = dict(self.folders)
-        folders[alias] = str(value)
+        folders[alias_clean] = str(path)
         self._data["folders"] = folders
         self.save()
 
     def remove_folder(self, alias: str) -> None:
+        alias_clean = alias.strip()
+        if not alias_clean:
+            return
+
         folders = dict(self.folders)
-        if alias in folders:
-            folders.pop(alias)
+        if alias_clean in folders:
+            folders.pop(alias_clean)
             self._data["folders"] = folders
             self.save()
 

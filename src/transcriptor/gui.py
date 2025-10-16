@@ -6,17 +6,45 @@ import os
 import sys
 import threading
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Iterable, List, Mapping, Optional, Tuple
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from .config import ConfigManager, PATHS
-from .disclaimer import DISCLAIMER_TEXT, disclaimer_with_signature, timestamp
-from .license import extract_payload, license_is_active, load_license, save_license, verify_license
-from .logging_utils import configure_logging
-from .theme import get_theme
-from .transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+if __package__ in (None, ""):
+    if str(PACKAGE_ROOT) not in sys.path:
+        sys.path.insert(0, str(PACKAGE_ROOT))
+
+    from transcriptor.config import ConfigManager, PATHS  # type: ignore
+    from transcriptor.disclaimer import (  # type: ignore
+        DISCLAIMER_TEXT,
+        disclaimer_with_signature,
+        timestamp,
+    )
+    from transcriptor.license import (  # type: ignore
+        extract_payload,
+        license_is_active,
+        load_license,
+        save_license,
+        verify_license,
+    )
+    from transcriptor.logging_utils import configure_logging  # type: ignore
+    from transcriptor.theme import get_theme  # type: ignore
+    from transcriptor.transcription import (  # type: ignore
+        GrammarCorrector,
+        ModelProvider,
+        OutputWriter,
+        Segment,
+        Transcriber,
+    )
+else:
+    from .config import ConfigManager, PATHS
+    from .disclaimer import DISCLAIMER_TEXT, disclaimer_with_signature, timestamp
+    from .license import extract_payload, license_is_active, load_license, save_license, verify_license
+    from .logging_utils import configure_logging
+    from .theme import get_theme
+    from .transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
 
 logger = configure_logging()
 
@@ -75,6 +103,82 @@ class Typewriter:
         self._after = self.root.after(delay, self._tick)
 
 
+class LicenseDialog:
+    """Modal dialog that prompts for a license file and secret."""
+
+    def __init__(self, parent: tk.Tk, theme_name: str, initial_path: Optional[Path]) -> None:
+        self.parent = parent
+        self.result: Optional[Tuple[Path, str]] = None
+        colors = get_theme(theme_name).palette
+
+        self.window = tk.Toplevel(parent)
+        self.window.title("Activar licencia")
+        self.window.configure(bg=colors["surface"])
+        self.window.resizable(False, False)
+        self.window.transient(parent)
+        self.window.grab_set()
+        self.window.protocol("WM_DELETE_WINDOW", self._cancel)
+
+        frame = ttk.Frame(self.window, padding=20, style="Dialog.TFrame")
+        frame.grid(row=0, column=0, sticky="nsew")
+
+        ttk.Label(
+            frame,
+            text="Para usar la aplicación necesitas activar tu licencia.",
+            style="Dialog.TLabel",
+            font=("Segoe UI", 12, "bold"),
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
+
+        ttk.Label(frame, text="Archivo de licencia:", style="Dialog.TLabel").grid(row=1, column=0, sticky="w")
+        self.path_var = tk.StringVar(value=str(initial_path) if initial_path else "")
+        path_entry = ttk.Entry(frame, textvariable=self.path_var, width=46)
+        path_entry.grid(row=1, column=1, sticky="ew", padx=(8, 4))
+        ttk.Button(frame, text="Buscar…", command=self._choose_file).grid(row=1, column=2, sticky="e")
+
+        ttk.Label(frame, text="Clave de activación:", style="Dialog.TLabel").grid(row=2, column=0, sticky="w", pady=(12, 0))
+        self.secret_var = tk.StringVar()
+        secret_entry = ttk.Entry(frame, textvariable=self.secret_var, show="*", width=46)
+        secret_entry.grid(row=2, column=1, sticky="ew", padx=(8, 4), pady=(12, 0))
+
+        ttk.Button(frame, text="Activar", command=self._submit, style="Accent.TButton").grid(row=3, column=1, sticky="e", pady=(20, 0))
+        ttk.Button(frame, text="Cancelar", command=self._cancel).grid(row=3, column=2, sticky="e", pady=(20, 0))
+
+        frame.columnconfigure(1, weight=1)
+
+        path_entry.focus_set()
+        self.window.bind("<Return>", lambda *_: self._submit())
+        self.window.bind("<Escape>", lambda *_: self._cancel())
+
+    # ------------------------------------------------------------------
+    def _choose_file(self) -> None:
+        path = filedialog.askopenfilename(
+            parent=self.window,
+            title="Selecciona tu licencia",
+            filetypes=[("JSON", "*.json"), ("Todos", "*")],
+        )
+        if path:
+            self.path_var.set(path)
+
+    def _submit(self) -> None:
+        raw_path = self.path_var.get().strip()
+        secret = self.secret_var.get().strip()
+        if not raw_path:
+            messagebox.showerror("Licencia", "Selecciona el archivo de licencia.", parent=self.window)
+            return
+        if not secret:
+            messagebox.showerror("Licencia", "Introduce la clave de activación.", parent=self.window)
+            return
+        path = Path(raw_path)
+        if not path.is_file():
+            messagebox.showerror("Licencia", "No se encontró el archivo seleccionado.", parent=self.window)
+            return
+        self.result = (path, secret)
+        self.window.destroy()
+
+    def _cancel(self) -> None:
+        self.result = None
+        self.window.destroy()
+
 class ThemeManager:
     def __init__(self, root: tk.Tk, cfg: ConfigManager) -> None:
         self.root = root
@@ -99,6 +203,8 @@ class ThemeManager:
         self.style.configure("TLabel", background=colors["bg"], foreground=colors["text"])
         self.style.configure("Header.TLabel", font=("Segoe UI", 13, "bold"))
         self.style.configure("Hint.TLabel", foreground=colors["text-muted"], background=colors["bg"])
+        self.style.configure("Dialog.TFrame", background=colors["surface"])
+        self.style.configure("Dialog.TLabel", background=colors["surface"], foreground=colors["text"])
 
         self.style.configure("TButton", font=("Segoe UI", 11), padding=8, background=colors["surface"], foreground=colors["text"], relief="flat")
         self.style.map(
@@ -110,6 +216,29 @@ class ThemeManager:
         self.style.map("Accent.TButton", background=[("active", colors["accent-alt"])] )
         self.style.configure("Danger.TButton", background=colors["danger"], foreground="#ffffff")
         self.style.map("Danger.TButton", background=[("active", "#f87171")])
+
+        self.style.configure("TRadiobutton", background=colors["bg"], foreground=colors["text"], indicatorcolor=colors["accent"], indicatorbackground=colors["surface"])
+        self.style.map(
+            "TRadiobutton",
+            background=[("active", colors["surface"])],
+            indicatorcolor=[("!disabled", colors["accent"]), ("pressed", colors["accent-alt"])],
+            foreground=[("disabled", colors["text-muted"])],
+        )
+
+        self.style.configure("TCheckbutton", background=colors["bg"], foreground=colors["text"], indicatorcolor=colors["accent"], indicatorbackground=colors["surface"])
+        self.style.map(
+            "TCheckbutton",
+            background=[("active", colors["surface"])],
+            indicatorcolor=[("!disabled", colors["accent"]), ("pressed", colors["accent-alt"])],
+            foreground=[("disabled", colors["text-muted"])],
+        )
+
+        self.style.configure("TEntry", fieldbackground=colors["surface"], background=colors["surface"], foreground=colors["text"], insertcolor=colors["accent"])
+        self.style.map(
+            "TEntry",
+            fieldbackground=[("disabled", colors["surface-alt"])],
+            foreground=[("disabled", colors["text-muted"])],
+        )
 
         self.style.configure("TCombobox", fieldbackground=colors["surface"], background=colors["surface"], foreground=colors["text"])
         self.style.map("TCombobox", fieldbackground=[("readonly", colors["surface"])] )
@@ -169,11 +298,13 @@ class TranscriptorApp:
         self.transcribing = False
         self.license_secret: Optional[str] = None
         self.license_active = False
+        self._prompting_license = False
 
         self._build_menu()
         self._build_layout()
         self._load_disclaimer()
         self._load_license_from_config()
+        self._prompt_license_on_startup()
 
         if HAS_DND:
             try:
@@ -181,6 +312,18 @@ class TranscriptorApp:
                 self.tree.dnd_bind("<<Drop>>", self._on_drop)
             except Exception:
                 pass
+
+    # ------------------------------------------------------------------
+    def _theme_color(self, key: str) -> str:
+        theme_name = self.theme_manager.current or self.cfg.theme()
+        return get_theme(theme_name).color(key)
+
+    def _selected_model_id(self) -> str:
+        label = self.model_var.get()
+        if label in self.model_display_to_id:
+            return self.model_display_to_id[label]
+        # Fallback to the last (most accurate) model when the label was tampered with.
+        return self.model_choices[-1][1]
 
     # ------------------------------------------------------------------
     def _build_menu(self) -> None:
@@ -227,28 +370,43 @@ class TranscriptorApp:
         container = ttk.Frame(self.root, padding=16)
         container.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(container, text="Modelo:").grid(row=0, column=0, sticky="w")
-        self.model_var = tk.StringVar(value="large-v3")
-        ttk.Combobox(container, textvariable=self.model_var, values=["tiny", "base", "small", "medium", "large-v3"], state="readonly").grid(row=0, column=1, sticky="ew")
+        ttk.Label(container, text="Calidad del modelo:").grid(row=0, column=0, sticky="w")
+        self.model_choices: List[Tuple[str, str]] = [
+            ("Muy rápido (Tiny)", "tiny"),
+            ("Rápido (Base)", "base"),
+            ("Equilibrado (Small)", "small"),
+            ("Alta calidad (Medium)", "medium"),
+            ("Máxima precisión (Large v3)", "large-v3"),
+        ]
+        self.model_display_to_id = {label: value for label, value in self.model_choices}
+        default_model = "large-v3"
+        default_label = next((label for label, value in self.model_choices if value == default_model), self.model_choices[-1][0])
+        self.model_var = tk.StringVar(value=default_label)
+        self.model_combo = ttk.Combobox(
+            container,
+            textvariable=self.model_var,
+            values=[label for label, _ in self.model_choices],
+            state="readonly",
+        )
+        self.model_combo.grid(row=0, column=1, sticky="ew")
 
         ttk.Label(container, text="Idioma:").grid(row=0, column=2, sticky="w", padx=(12, 0))
         self.lang_var = tk.StringVar(value="Auto")
         ttk.Combobox(container, textvariable=self.lang_var, values=["Auto", "es", "en", "fr", "de", "it", "pt"], state="readonly").grid(row=0, column=3, sticky="ew")
 
-        ttk.Label(container, text="Dispositivo:").grid(row=1, column=0, sticky="w", pady=(8, 4))
+        ttk.Label(container, text="Procesamiento:").grid(row=1, column=0, sticky="w", pady=(8, 4))
         self.device_var = tk.StringVar(value="cuda")
         ttk.Radiobutton(container, text="GPU", variable=self.device_var, value="cuda").grid(row=1, column=1, sticky="w")
         ttk.Radiobutton(container, text="CPU", variable=self.device_var, value="cpu").grid(row=1, column=1, sticky="e")
 
         self.vad_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(container, text="VAD (silencios)", variable=self.vad_var).grid(row=1, column=3, sticky="e")
+        ttk.Checkbutton(container, text="Detectar silencios automáticamente (VAD)", variable=self.vad_var).grid(row=1, column=3, sticky="e")
 
         ttk.Separator(container).grid(row=2, column=0, columnspan=4, sticky="ew", pady=10)
 
         ttk.Label(container, text="Destino:").grid(row=3, column=0, sticky="w")
         self.dest_var = tk.StringVar(value="(Misma carpeta)")
         self.dest_combo = ttk.Combobox(container, textvariable=self.dest_var, state="readonly")
-        self._refresh_destinations()
         self.dest_combo.grid(row=3, column=1, sticky="ew", pady=(0, 6))
         self.dest_combo.bind("<<ComboboxSelected>>", lambda *_: self._toggle_open_button())
 
@@ -257,6 +415,8 @@ class TranscriptorApp:
         ttk.Button(dest_btn_frame, text="Añadir carpeta", command=self._add_destination).pack(side=tk.LEFT, padx=4)
         self.open_dest_btn = ttk.Button(dest_btn_frame, text="Abrir carpeta", command=self._open_destination)
         self.open_dest_btn.pack(side=tk.LEFT, padx=4)
+
+        self._refresh_destinations()
 
         ttk.Separator(container).grid(row=4, column=0, columnspan=4, sticky="ew", pady=10)
 
@@ -286,7 +446,7 @@ class TranscriptorApp:
 
         speed_frame = ttk.Frame(container)
         speed_frame.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(12, 0))
-        ttk.Label(speed_frame, text="Velocidad máquina de escribir:", style="Hint.TLabel").pack(side=tk.LEFT)
+        ttk.Label(speed_frame, text="Velocidad de escritura:", style="Hint.TLabel").pack(side=tk.LEFT)
         self.speed_value = ttk.Label(speed_frame, text="", style="Hint.TLabel")
         self.speed_value.pack(side=tk.LEFT, padx=(8, 12))
         self.speed_var = tk.IntVar(value=self.cfg.get_cps())
@@ -317,8 +477,12 @@ class TranscriptorApp:
         self.status_label = ttk.Label(container, text="Estado: listo")
         self.status_label.grid(row=11, column=0, columnspan=4, sticky="w", pady=(2, 6))
 
-        self.progress = ttk.Progressbar(container, mode="determinate", maximum=100, style="Accent.Horizontal.TProgressbar")
-        self.progress.grid(row=12, column=0, columnspan=3, sticky="ew", pady=6)
+        progress_row = ttk.Frame(container)
+        progress_row.grid(row=12, column=0, columnspan=3, sticky="ew", pady=6)
+        self.progress = ttk.Progressbar(progress_row, mode="determinate", maximum=100, style="Accent.Horizontal.TProgressbar")
+        self.progress.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.progress_label = ttk.Label(progress_row, text="0 %", width=6, anchor="e", font=("Segoe UI", 11, "bold"))
+        self.progress_label.pack(side=tk.LEFT, padx=(12, 0))
         self.cancel_btn = ttk.Button(container, text="Cancelar", command=self.cancel_event.set, state=tk.DISABLED, style="Danger.TButton")
         self.cancel_btn.grid(row=12, column=3, sticky="e")
 
@@ -369,6 +533,9 @@ class TranscriptorApp:
         )
         self._configure_tree_tags(theme_name)
         self.theme_choice.set(theme_name)
+        if hasattr(self, "license_label"):
+            color = "accent" if self.license_active else "danger"
+            self.license_label.config(foreground=self._theme_color(color))
 
     # ------------------------------------------------------------------
     # Menu handlers
@@ -392,6 +559,58 @@ class TranscriptorApp:
         if blob and isinstance(blob.get("signature"), str):
             return blob["signature"]
         return None
+
+    def _auto_license_candidate(self) -> Optional[Path]:
+        locations: List[Path] = []
+        try:
+            base = Path(sys.executable if getattr(sys, "frozen", False) else sys.argv[0]).resolve().parent
+            locations.append(base)
+        except Exception:
+            pass
+        try:
+            package_root = Path(__file__).resolve().parent
+            locations.append(package_root)
+        except Exception:
+            pass
+        locations.append(Path.cwd())
+
+        seen: set[Path] = set()
+        for root in locations:
+            if root in seen:
+                continue
+            seen.add(root)
+            for name in ("licencia.json", "license.json"):
+                candidate = root / name
+                if candidate.is_file():
+                    return candidate
+        return None
+
+    def _prompt_license_on_startup(self) -> None:
+        if self.license_active or self._prompting_license:
+            return
+
+        def show_dialog() -> None:
+            candidate = self._auto_license_candidate()
+            dialog = LicenseDialog(self.root, self.theme_manager.current or self.cfg.theme(), candidate)
+            self.root.wait_window(dialog.window)
+            self._prompting_license = False
+            if not dialog.result:
+                return
+
+            path, secret = dialog.result
+            try:
+                blob = load_license(path)
+            except Exception as exc:
+                messagebox.showerror("Licencia", f"No se pudo leer la licencia seleccionada.\n{exc}", parent=self.root)
+                self.root.after(300, self._prompt_license_on_startup)
+                return
+
+            if not self._activate_license(blob, secret):
+                messagebox.showerror("Licencia", "La licencia no es válida o ya expiró.", parent=self.root)
+                self.root.after(300, self._prompt_license_on_startup)
+
+        self._prompting_license = True
+        self.root.after(300, show_dialog)
 
     def _load_license_from_config(self) -> None:
         blob = self.cfg.license_blob()
@@ -445,9 +664,9 @@ class TranscriptorApp:
 
     def _update_license_label(self, valid: bool, holder: Optional[str] = None, expires: Optional[str] = None, signature: Optional[str] = None) -> None:
         if valid:
-            self.license_label.config(text=f"Licencia válida: {holder} (expira {expires})", foreground="green")
+            self.license_label.config(text=f"Licencia válida: {holder} (expira {expires})", foreground=self._theme_color("accent"))
         else:
-            self.license_label.config(text="Licencia: no verificada", foreground="red")
+            self.license_label.config(text="Licencia: no verificada", foreground=self._theme_color("danger"))
         if signature:
             self.license_label.config(text=self.license_label.cget("text") + f" — {signature[:10]}…")
 
@@ -566,35 +785,45 @@ class TranscriptorApp:
 
     # ------------------------------------------------------------------
     def _refresh_destinations(self) -> None:
+        folders = self.cfg.folders
         base = ["(Misma carpeta)", "(Preguntar cada vez)"]
-        values = base + list(self.cfg.folders.keys())
+        values = base + list(folders.keys())
         self.dest_combo.config(values=values)
         if self.dest_var.get() not in values:
             self.dest_var.set("(Misma carpeta)")
-        self._toggle_open_button()
+        self._toggle_open_button(folders)
 
     def _add_destination(self) -> None:
         alias = simpledialog.askstring("Nueva carpeta", "Nombre de la asignatura o carpeta:", parent=self.root)
         if not alias:
             return
         alias = alias.strip()
+        if not alias:
+            messagebox.showerror("Destino", "El nombre no puede estar vacío.")
+            return
         if alias in ("(Misma carpeta)", "(Preguntar cada vez)"):
             messagebox.showerror("Destino", "Ese nombre está reservado.")
             return
-        if alias in self.cfg.folders:
+        existing = self.cfg.folders
+        if alias in existing:
             messagebox.showerror("Destino", "Ya existe una carpeta con ese nombre.")
             return
         selected = filedialog.askdirectory(title="Selecciona carpeta de destino")
         if not selected:
             return
-        self.cfg.set_folder(alias, Path(selected))
+        try:
+            self.cfg.set_folder(alias, Path(selected))
+        except ValueError as exc:
+            messagebox.showerror("Destino", str(exc))
+            return
         self._refresh_destinations()
         self.dest_var.set(alias)
         messagebox.showinfo("Destino", f"Asignado {alias} → {selected}")
 
     def _open_destination(self) -> None:
         name = self.dest_var.get()
-        path_str = self.cfg.folders.get(name)
+        folders = self.cfg.folders
+        path_str = folders.get(name)
         if not path_str:
             return
         path = Path(path_str)
@@ -615,9 +844,11 @@ class TranscriptorApp:
         except Exception as exc:
             messagebox.showerror("Destino", str(exc))
 
-    def _toggle_open_button(self) -> None:
+    def _toggle_open_button(self, folders: Optional[Mapping[str, str]] = None) -> None:
         name = self.dest_var.get()
-        self.open_dest_btn.config(state=tk.NORMAL if name in self.cfg.folders else tk.DISABLED)
+        if hasattr(self, "open_dest_btn"):
+            available = folders if folders is not None else self.cfg.folders
+            self.open_dest_btn.config(state=tk.NORMAL if name in available else tk.DISABLED)
 
     def _destination_for(self, audio: Path) -> Path:
         choice = self.dest_var.get()
@@ -634,7 +865,7 @@ class TranscriptorApp:
     # ------------------------------------------------------------------
     def _update_speed(self) -> None:
         cps = self.speed_var.get()
-        self.speed_value.config(text=f"{cps} cps")
+        self.speed_value.config(text=f"{cps} caracteres/s")
         self.typewriter.set_speed(cps)
         self.cfg.set_cps(cps)
 
@@ -646,8 +877,9 @@ class TranscriptorApp:
         self.cancel_event.clear()
         self.process_btn.config(state=tk.DISABLED)
         self.cancel_btn.config(state=tk.NORMAL)
-        self.status_label.config(text="Estado: transcribiendo…")
+        self.status_label.config(text="Estado: transcribiendo…", foreground=self._theme_color("text"))
         self.progress.config(value=0)
+        self.progress_label.config(text="0 %")
         self.output.delete("1.0", tk.END)
         self.typewriter.reset()
         self.save_btn.config(state=tk.DISABLED)
@@ -669,7 +901,7 @@ class TranscriptorApp:
             try:
                 text, segments, elapsed = transcriber.transcribe(
                     audio,
-                    model_name=self.model_var.get(),
+                    model_name=self._selected_model_id(),
                     device=self.device_var.get(),
                     language=language,
                     vad_filter=self.vad_var.get(),
@@ -702,8 +934,10 @@ class TranscriptorApp:
     def _on_progress(self, name: str, pct: Optional[float], segment: Segment) -> None:
         def update_ui() -> None:
             if pct is not None:
-                self.progress.config(value=pct)
-                self.status_label.config(text=f"Estado: {name} {pct:.1f}%")
+                clamped = max(0.0, min(100.0, pct))
+                self.progress.config(value=clamped)
+                self.progress_label.config(text=f"{clamped:.0f} %")
+                self.status_label.config(text=f"Estado: {name} ({clamped:.0f}%)", foreground=self._theme_color("text"))
             self.typewriter.enqueue(segment.text)
 
         self.root.after(0, update_ui)
@@ -720,7 +954,8 @@ class TranscriptorApp:
         self.transcribing = False
         self.cancel_btn.config(state=tk.DISABLED)
         self.progress.config(value=0)
-        self.status_label.config(text="Estado: completado", foreground="green")
+        self.progress_label.config(text="0 %")
+        self.status_label.config(text="Estado: completado", foreground=self._theme_color("accent"))
         self._update_process_button()
         self.queue.clear()
         for item in self.tree.get_children():

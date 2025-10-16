@@ -2,15 +2,30 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import typer
 from rich import print
 from rich.panel import Panel
 
-from .disclaimer import DISCLAIMER_TEXT
-from .license import issue_license, load_license, save_license, verify_license
-from . import __version__
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+if __package__ in (None, ""):
+    if str(PACKAGE_ROOT) not in sys.path:
+        sys.path.insert(0, str(PACKAGE_ROOT))
+
+    from transcriptor import __version__  # type: ignore
+    from transcriptor.disclaimer import DISCLAIMER_TEXT  # type: ignore
+    from transcriptor.license import (  # type: ignore
+        issue_license,
+        load_license,
+        save_license,
+        verify_license,
+    )
+else:
+    from . import __version__
+    from .disclaimer import DISCLAIMER_TEXT
+    from .license import issue_license, load_license, save_license, verify_license
 
 app = typer.Typer(add_completion=False, help="Herramientas administrativas para Transcriptor de FERIA")
 
@@ -54,6 +69,7 @@ def cmd_verify(
     if verify_license(blob, clave_secreta):
         print(Panel.fit("Licencia válida", title="Resultado", border_style="green"))
     else:
+        print(Panel.fit("Licencia inválida o expirada", title="Resultado", border_style="red"))
         raise typer.Exit(code=1)
 
 
