@@ -6,7 +6,7 @@ import os
 import sys
 import threading
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, Iterable, List, Mapping, Optional
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
@@ -595,35 +595,45 @@ class TranscriptorApp:
 
     # ------------------------------------------------------------------
     def _refresh_destinations(self) -> None:
+        folders = self.cfg.folders
         base = ["(Misma carpeta)", "(Preguntar cada vez)"]
-        values = base + list(self.cfg.folders.keys())
+        values = base + list(folders.keys())
         self.dest_combo.config(values=values)
         if self.dest_var.get() not in values:
             self.dest_var.set("(Misma carpeta)")
-        self._toggle_open_button()
+        self._toggle_open_button(folders)
 
     def _add_destination(self) -> None:
         alias = simpledialog.askstring("Nueva carpeta", "Nombre de la asignatura o carpeta:", parent=self.root)
         if not alias:
             return
         alias = alias.strip()
+        if not alias:
+            messagebox.showerror("Destino", "El nombre no puede estar vacío.")
+            return
         if alias in ("(Misma carpeta)", "(Preguntar cada vez)"):
             messagebox.showerror("Destino", "Ese nombre está reservado.")
             return
-        if alias in self.cfg.folders:
+        existing = self.cfg.folders
+        if alias in existing:
             messagebox.showerror("Destino", "Ya existe una carpeta con ese nombre.")
             return
         selected = filedialog.askdirectory(title="Selecciona carpeta de destino")
         if not selected:
             return
-        self.cfg.set_folder(alias, Path(selected))
+        try:
+            self.cfg.set_folder(alias, Path(selected))
+        except ValueError as exc:
+            messagebox.showerror("Destino", str(exc))
+            return
         self._refresh_destinations()
         self.dest_var.set(alias)
         messagebox.showinfo("Destino", f"Asignado {alias} → {selected}")
 
     def _open_destination(self) -> None:
         name = self.dest_var.get()
-        path_str = self.cfg.folders.get(name)
+        folders = self.cfg.folders
+        path_str = folders.get(name)
         if not path_str:
             return
         path = Path(path_str)
@@ -644,10 +654,11 @@ class TranscriptorApp:
         except Exception as exc:
             messagebox.showerror("Destino", str(exc))
 
-    def _toggle_open_button(self) -> None:
+    def _toggle_open_button(self, folders: Optional[Mapping[str, str]] = None) -> None:
         name = self.dest_var.get()
         if hasattr(self, "open_dest_btn"):
-            self.open_dest_btn.config(state=tk.NORMAL if name in self.cfg.folders else tk.DISABLED)
+            available = folders if folders is not None else self.cfg.folders
+            self.open_dest_btn.config(state=tk.NORMAL if name in available else tk.DISABLED)
 
     def _destination_for(self, audio: Path) -> Path:
         choice = self.dest_var.get()
