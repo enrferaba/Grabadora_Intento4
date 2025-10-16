@@ -11,12 +11,40 @@ from typing import Callable, Iterable, List, Optional
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from .config import ConfigManager, PATHS
-from .disclaimer import DISCLAIMER_TEXT, disclaimer_with_signature, timestamp
-from .license import extract_payload, license_is_active, load_license, save_license, verify_license
-from .logging_utils import configure_logging
-from .theme import get_theme
-from .transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+if __package__ in (None, ""):
+    if str(PACKAGE_ROOT) not in sys.path:
+        sys.path.insert(0, str(PACKAGE_ROOT))
+
+    from transcriptor.config import ConfigManager, PATHS  # type: ignore
+    from transcriptor.disclaimer import (  # type: ignore
+        DISCLAIMER_TEXT,
+        disclaimer_with_signature,
+        timestamp,
+    )
+    from transcriptor.license import (  # type: ignore
+        extract_payload,
+        license_is_active,
+        load_license,
+        save_license,
+        verify_license,
+    )
+    from transcriptor.logging_utils import configure_logging  # type: ignore
+    from transcriptor.theme import get_theme  # type: ignore
+    from transcriptor.transcription import (  # type: ignore
+        GrammarCorrector,
+        ModelProvider,
+        OutputWriter,
+        Segment,
+        Transcriber,
+    )
+else:
+    from .config import ConfigManager, PATHS
+    from .disclaimer import DISCLAIMER_TEXT, disclaimer_with_signature, timestamp
+    from .license import extract_payload, license_is_active, load_license, save_license, verify_license
+    from .logging_utils import configure_logging
+    from .theme import get_theme
+    from .transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
 
 logger = configure_logging()
 
@@ -248,7 +276,6 @@ class TranscriptorApp:
         ttk.Label(container, text="Destino:").grid(row=3, column=0, sticky="w")
         self.dest_var = tk.StringVar(value="(Misma carpeta)")
         self.dest_combo = ttk.Combobox(container, textvariable=self.dest_var, state="readonly")
-        self._refresh_destinations()
         self.dest_combo.grid(row=3, column=1, sticky="ew", pady=(0, 6))
         self.dest_combo.bind("<<ComboboxSelected>>", lambda *_: self._toggle_open_button())
 
@@ -257,6 +284,8 @@ class TranscriptorApp:
         ttk.Button(dest_btn_frame, text="Añadir carpeta", command=self._add_destination).pack(side=tk.LEFT, padx=4)
         self.open_dest_btn = ttk.Button(dest_btn_frame, text="Abrir carpeta", command=self._open_destination)
         self.open_dest_btn.pack(side=tk.LEFT, padx=4)
+
+        self._refresh_destinations()
 
         ttk.Separator(container).grid(row=4, column=0, columnspan=4, sticky="ew", pady=10)
 
@@ -617,7 +646,8 @@ class TranscriptorApp:
 
     def _toggle_open_button(self) -> None:
         name = self.dest_var.get()
-        self.open_dest_btn.config(state=tk.NORMAL if name in self.cfg.folders else tk.DISABLED)
+        if hasattr(self, "open_dest_btn"):
+            self.open_dest_btn.config(state=tk.NORMAL if name in self.cfg.folders else tk.DISABLED)
 
     def _destination_for(self, audio: Path) -> Path:
         choice = self.dest_var.get()

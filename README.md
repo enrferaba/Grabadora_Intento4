@@ -72,12 +72,28 @@ La salida tendrá código de retorno 0 cuando la licencia sea válida.
 
 2. Genera el ejecutable de un solo archivo:
 
-   ```bash
-   pyinstaller -F -w src/transcriptor/gui.py \
-     --name "TranscriptorFeria" \
-     --add-data "src/transcriptor/models;transcriptor/models" \
-     --add-data "src/transcriptor/ffmpeg/ffmpeg.exe;transcriptor/ffmpeg"
-   ```
+   - macOS/Linux (bash):
+
+     ```bash
+     pyinstaller -F -w src/transcriptor/gui.py \
+       --name "TranscriptorFeria" \
+       --add-data "src/transcriptor/models;transcriptor/models" \
+       --add-data "src/transcriptor/ffmpeg/ffmpeg.exe;transcriptor/ffmpeg"
+     ```
+
+   - Windows (PowerShell o CMD):
+
+     ```powershell
+     pyinstaller -F -w src/transcriptor/gui.py --name "TranscriptorFeria" --add-data "src/transcriptor/models;transcriptor/models" --add-data "src/transcriptor/ffmpeg/ffmpeg.exe;transcriptor/ffmpeg"
+     ```
+
+     > En PowerShell también puedes usar el acento grave `` ` `` como separador de líneas si prefieres mantener el formato multilínea.
+
+     ```powershell
+     pyinstaller -F -w src/transcriptor/gui.py `
+       --name "TranscriptorFeria" `
+       --add-data "src/transcriptor/ffmpeg/ffmpeg.exe;transcriptor/ffmpeg"
+     ```
 
    - `-w` oculta la consola.
    - Los parámetros `--add-data` permiten incluir modelos precargados y FFmpeg si los tienes preparados. Adáptalos según tu estructura.
@@ -99,6 +115,7 @@ Los logs rotativos se almacenan en `%APPDATA%/Transcriptor/logs/app.log` (Window
 ## Desarrollo rápido
 
 - Ejecuta la GUI en caliente: `python -m transcriptor.gui`.
+- Si prefieres lanzar el archivo directamente (por ejemplo en Windows desde el repositorio), usa `python src/transcriptor/gui.py`.
 - Lanza la CLI Typer en modo ayuda: `transcriptor --help`.
 - Valida la sintaxis: `python -m compileall src`.
 
