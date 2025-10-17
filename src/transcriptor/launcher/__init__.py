@@ -19,6 +19,7 @@ except Exception:  # pragma: no cover - headless fallback
     Image = None  # type: ignore
     ImageDraw = None  # type: ignore
 
+from ..constants import API_HOST, API_PORT, FRONTEND_PORT
 from ..logging_utils import configure_logging
 
 logger = configure_logging()
@@ -26,9 +27,9 @@ logger = configure_logging()
 
 @dataclass
 class LauncherConfig:
-    host: str = "127.0.0.1"
-    api_port: int = 4814
-    ui_port: int = 4815
+    host: str = API_HOST
+    api_port: int = API_PORT
+    ui_port: int = FRONTEND_PORT
     auto_open: bool = True
 
 
@@ -82,7 +83,16 @@ class Launcher:
             return
         if self._ui_proc and self._ui_proc.poll() is None:
             return
-        npm_command = ["npm", "run", "dev", "--", "--port", str(self.config.ui_port)]
+        npm_command = [
+            "npm",
+            "run",
+            "dev",
+            "--",
+            "--hostname",
+            self.config.host,
+            "--port",
+            str(self.config.ui_port),
+        ]
         logger.info("Lanzando UI Next.js en %s", ui_root)
         self._ui_proc = subprocess.Popen(npm_command, cwd=str(ui_root))
 
