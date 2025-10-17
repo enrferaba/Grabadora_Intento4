@@ -88,19 +88,27 @@ transcriptor launcher
 
 ## Licencias y gating por features
 
-- Emite tokens RS256/ES256 ligados a un dispositivo con:
+- Emite tokens RS256/ES256 ligados a un dispositivo con (usa acentos graves `` ` `` como continuación de línea en PowerShell):
 
-  ```bash
-  transcriptor licencia-token-emitir --llave-privada clave.pem --correo user@example.com --plan pro \
-    --feature summary:redactado --feature export:docx --dias 30 --seats 1
+  ```powershell
+  transcriptor licencia-token-emitir `
+    --llave-privada clave.pem `
+    --correo user@example.com `
+    --plan pro `
+    --feature summary:redactado `
+    --feature export:docx `
+    --dias 30 `
+    --seats 1
   ```
 
   El comando imprime el payload y el JWT. Entrega el token junto a `licencia.json` (puede contener `{ "token": "..." }`).
 
 - Comprueba un token con:
 
-  ```bash
-  transcriptor licencia-token-verificar --token "<jwt>" --llave-publica public.pem
+  ```powershell
+  transcriptor licencia-token-verificar `
+    --token "<jwt>" `
+    --llave-publica public.pem
   ```
 
 - Estado local:
@@ -175,6 +183,18 @@ palabras, fallos del motor, incidencias de licencia).
 
 - Ejecuta el backend + frontend en paralelo (`transcriptor api` y `npm run dev`).
 - Usa la ruta `/health` para comprobar integridad (incluye estado de licencia y versión).
+- Cada push y pull request se valida en GitHub Actions (`.github/workflows/ci.yml`) con `python -m compileall` y `npm run lint` para detectar errores en backend y frontend.
+
+## Script rápido en Windows
+
+Si prefieres automatizar los comandos básicos, ejecuta:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+./scripts/windows_quickstart.ps1
+```
+
+El script instala dependencias, compila el backend, ejecuta el lint del frontend y muestra el estado de la licencia. Opcionalmente emite y verifica tokens si proporcionas `-PrivateKey`, `-PublicKey` y `-LicenseToken`.
 
 ## Próximos pasos
 

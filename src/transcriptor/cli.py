@@ -4,12 +4,17 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich import print
 from rich.panel import Panel
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+fastapi_app = None  # type: ignore[assignment]
+_api_import_error: Optional[Exception] = None
+
+
 if __package__ in (None, ""):
     if str(PACKAGE_ROOT) not in sys.path:
         sys.path.insert(0, str(PACKAGE_ROOT))
@@ -20,8 +25,14 @@ if __package__ in (None, ""):
     from transcriptor.license_tokens import decode_token, issue_token  # type: ignore
     from transcriptor.license_service import LicenseManager  # type: ignore
     from transcriptor.launcher import run_launcher  # type: ignore
-    from transcriptor.api import app as fastapi_app  # type: ignore
     from transcriptor.config import ConfigManager, PATHS  # type: ignore
+
+    try:
+        from transcriptor.api import app as _fastapi_app  # type: ignore
+    except Exception as exc:  # pragma: no cover - defensive feedback
+        _api_import_error = exc
+    else:
+        fastapi_app = _fastapi_app
 else:
     from . import __version__
     from .disclaimer import DISCLAIMER_TEXT
@@ -29,8 +40,14 @@ else:
     from .license_tokens import decode_token, issue_token
     from .license_service import LicenseManager
     from .launcher import run_launcher
-    from .api import app as fastapi_app
     from .config import ConfigManager, PATHS
+
+    try:
+        from .api import app as _fastapi_app
+    except Exception as exc:  # pragma: no cover - defensive feedback
+        _api_import_error = exc
+    else:
+        fastapi_app = _fastapi_app
 
 app = typer.Typer(add_completion=False, help="Herramientas administrativas para Transcriptor de FERIA")
 
@@ -50,6 +67,14 @@ def run_api(
     reload: bool = typer.Option(False, help="Activa autoreload (solo desarrollo)"),
 ) -> None:
     """Arranca el backend FastAPI local."""
+    if fastapi_app is None:
+        typer.secho(
+            "El backend FastAPI no pudo importarse. Revisa la instalación (falta:"
+            f" {_api_import_error})",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     import uvicorn
 
     uvicorn.run(fastapi_app, host=host, port=port, reload=reload, log_level="info")
@@ -58,6 +83,14 @@ def run_api(
 @app.command("launcher")
 def run_launcher_cmd() -> None:
     """Inicia el launcher con bandeja del sistema."""
+    if _api_import_error is not None:
+        typer.secho(
+            "No se puede iniciar el launcher porque el backend no cargó:"
+            f" {_api_import_error}",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     run_launcher()
 
 

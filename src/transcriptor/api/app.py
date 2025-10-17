@@ -19,7 +19,7 @@ from ..config import ConfigManager, PATHS
 from ..license_service import LicenseManager
 from ..logging_utils import configure_logging
 from ..transcription import GrammarCorrector, ModelProvider, OutputWriter, Transcriber
-from ..transcription.transcription import Segment
+from ..transcription import Segment
 from .jobs import JobArtifact, JobStatus, JobStore
 from .models import (
     ExportRequest,
