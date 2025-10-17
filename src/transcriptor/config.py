@@ -16,17 +16,29 @@ class AppPaths:
     """Centralised filesystem locations used by the application."""
 
     base_dir: Path
+    data_dir: Path
+    jobs_dir: Path
+    summaries_dir: Path
+    exports_dir: Path
     log_dir: Path
     log_file: Path
     config_file: Path
     models_dir: Path
+    diagnostics_dir: Path
     ffmpeg_executable: Optional[Path]
 
     @staticmethod
     def build() -> "AppPaths":
         base = Path(os.environ.get("APPDATA") or Path.home()) / APP_NAME
+        data_dir = base / "data"
+        jobs_dir = data_dir / "jobs"
+        summaries_dir = data_dir / "summaries"
+        exports_dir = data_dir / "exports"
+        diagnostics_dir = base / "diagnostics"
         log_dir = base / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
+
+        for folder in (data_dir, jobs_dir, summaries_dir, exports_dir, diagnostics_dir, log_dir):
+            folder.mkdir(parents=True, exist_ok=True)
 
         packaged_models = Path(__file__).with_name("models")
         if packaged_models.is_dir() and any(packaged_models.iterdir()):
@@ -40,10 +52,15 @@ class AppPaths:
 
         return AppPaths(
             base_dir=base,
+            data_dir=data_dir,
+            jobs_dir=jobs_dir,
+            summaries_dir=summaries_dir,
+            exports_dir=exports_dir,
             log_dir=log_dir,
             log_file=log_dir / "app.log",
             config_file=base / "config.json",
             models_dir=models_dir,
+            diagnostics_dir=diagnostics_dir,
             ffmpeg_executable=ffmpeg_executable,
         )
 
@@ -58,6 +75,13 @@ class ConfigManager:
         "disclaimer_ack_at": None,
         "license": None,
         "license_secret": None,
+        "license_token": None,
+        "license_public_key": None,
+        "solo_local": True,
+        "output_dir": None,
+        "retention_days": 90,
+        "interface_language": "es",
+        "launch_minimized": False,
     }
 
     def __init__(self, path: Path) -> None:
@@ -218,6 +242,78 @@ class ConfigManager:
         else:
             encoded = None
         self._data["license_secret"] = encoded
+        self.save()
+
+    # ------------------------------------------------------------------
+    def license_token(self) -> Optional[str]:
+        token = self._data.get("license_token")
+        if isinstance(token, str) and token.strip():
+            return token.strip()
+        return None
+
+    def set_license_token(self, token: Optional[str]) -> None:
+        self._data["license_token"] = token.strip() if token else None
+        self.save()
+
+    def license_public_key(self) -> Optional[str]:
+        key = self._data.get("license_public_key")
+        if isinstance(key, str) and key.strip():
+            return key.strip()
+        return None
+
+    def set_license_public_key(self, key: Optional[str]) -> None:
+        self._data["license_public_key"] = key.strip() if key else None
+        self.save()
+
+    # ------------------------------------------------------------------
+    def solo_local(self) -> bool:
+        return bool(self._data.get("solo_local", True))
+
+    def set_solo_local(self, enabled: bool) -> None:
+        self._data["solo_local"] = bool(enabled)
+        self.save()
+
+    def output_dir(self) -> Optional[Path]:
+        raw = self._data.get("output_dir")
+        if isinstance(raw, str) and raw.strip():
+            try:
+                return Path(raw).expanduser()
+            except Exception:
+                return None
+        return None
+
+    def set_output_dir(self, path: Optional[Union[str, Path]]) -> None:
+        if path is None:
+            self._data["output_dir"] = None
+        else:
+            resolved = str(Path(path).expanduser())
+            self._data["output_dir"] = resolved
+        self.save()
+
+    def retention_days(self) -> int:
+        try:
+            value = int(self._data.get("retention_days", 90))
+        except Exception:
+            value = 90
+        return max(7, value)
+
+    def set_retention_days(self, days: int) -> None:
+        self._data["retention_days"] = int(max(7, days))
+        self.save()
+
+    def interface_language(self) -> str:
+        value = str(self._data.get("interface_language", "es")).strip().lower()
+        return value or "es"
+
+    def set_interface_language(self, language: str) -> None:
+        self._data["interface_language"] = language.strip().lower() or "es"
+        self.save()
+
+    def launch_minimized(self) -> bool:
+        return bool(self._data.get("launch_minimized", False))
+
+    def set_launch_minimized(self, minimized: bool) -> None:
+        self._data["launch_minimized"] = bool(minimized)
         self.save()
 
 
