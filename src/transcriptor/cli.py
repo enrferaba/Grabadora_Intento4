@@ -26,6 +26,7 @@ if __package__ in (None, ""):
     from transcriptor.license_service import LicenseManager  # type: ignore
     from transcriptor.launcher import run_launcher  # type: ignore
     from transcriptor.config import ConfigManager, PATHS  # type: ignore
+    from transcriptor.constants import API_HOST, API_PORT  # type: ignore
 
     try:
         from transcriptor.api import app as _fastapi_app  # type: ignore
@@ -41,6 +42,7 @@ else:
     from .license_service import LicenseManager
     from .launcher import run_launcher
     from .config import ConfigManager, PATHS
+    from .constants import API_HOST, API_PORT
 
     try:
         from .api import app as _fastapi_app
@@ -48,6 +50,10 @@ else:
         _api_import_error = exc
     else:
         fastapi_app = _fastapi_app
+
+if "API_HOST" not in globals():  # pragma: no cover - defensive default during packaging
+    API_HOST = "127.0.0.1"
+    API_PORT = 4814
 
 app = typer.Typer(add_completion=False, help="Herramientas administrativas para Transcriptor de FERIA")
 
@@ -62,8 +68,8 @@ def launch_gui() -> None:
 
 @app.command("api")
 def run_api(
-    host: str = typer.Option("127.0.0.1", help="Host de escucha"),
-    port: int = typer.Option(4814, help="Puerto HTTP para el backend"),
+    host: str = typer.Option(API_HOST, help="Host de escucha"),
+    port: int = typer.Option(API_PORT, help="Puerto HTTP para el backend"),
     reload: bool = typer.Option(False, help="Activa autoreload (solo desarrollo)"),
 ) -> None:
     """Arranca el backend FastAPI local."""

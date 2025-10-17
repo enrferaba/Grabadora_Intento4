@@ -1,13 +1,13 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4814";
+import { API_JSON_HEADERS, API_ORIGIN } from "@/lib/config";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_ORIGIN}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
+      ...API_JSON_HEADERS,
+      ...(init?.headers ?? {}),
     },
-    cache: "no-store"
+    cache: "no-store",
   });
   if (!response.ok) {
     throw new Error(`Error ${response.status}`);

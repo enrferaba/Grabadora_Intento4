@@ -15,6 +15,13 @@ que mantiene todo funcionando en segundo plano.
 | Licenciamiento | Tokens RS256 ligados a la huella del dispositivo. Gating por features (`summary:redactado`, `export:docx`, etc.) con gracia offline configurable. | Embebido |
 | Almacenamiento | `%APPDATA%/Transcriptor/` (o `~/.Transcriptor/`): `data/jobs`, `data/summaries`, `data/exports`, `logs`, `diagnostics`. | Disco local |
 
+Documentación detallada:
+
+- [Contrato de API](docs/api.md)
+- [Modelo de licencias y gating](docs/licencia.md)
+- [Política "Solo local"](docs/solo-local.md)
+- [Checklist de QA](QA/CHECKLIST.md)
+
 ## Requisitos
 
 - Python 3.9 o superior.
@@ -27,6 +34,14 @@ que mantiene todo funcionando en segundo plano.
 ```bash
 python -m pip install --upgrade pip
 python -m pip install -e .
+```
+
+Si vienes de una instalación previa, limpia primero cualquier editable viejo para evitar rutas duplicadas:
+
+```bash
+python -m pip uninstall -y transcriptor-feria
+python -m pip install -e .
+python -m pip show transcriptor-feria  # verifica que Location apunte a este repo
 ```
 
 Instala también las dependencias del frontend si vas a trabajar la UI:
@@ -72,7 +87,7 @@ npm run dev
 - `Licencia`: estado actual, features activas, botón para revalidar.
 - `Logs`: documentación de la carpeta de diagnósticos y métricas locales.
 
-El frontend habla con el backend usando `NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:4814`).
+El frontend habla con el backend usando `NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:4814`). El valor se normaliza en `ui-next/lib/config.ts` para detectar puertos desalineados.
 
 ### Launcher con bandeja
 
@@ -81,7 +96,7 @@ transcriptor launcher
 ```
 
 - Arranca `uvicorn transcriptor.api:app` en 127.0.0.1:4814.
-- Lanza `npm run dev -- --port 4815` si detecta `ui-next/package.json` (puedes cambiar a un build estático para producción).
+- Lanza `npm run dev -- --hostname 127.0.0.1 --port 4815` si detecta `ui-next/package.json` (puedes cambiar a un build estático para producción).
 - Abre el navegador en `http://localhost:4815`.
 - Crea un icono en la bandeja (si `pystray` + `Pillow` están disponibles) con acciones **Abrir**, **Reiniciar**, **Salir**.
 - Watchdog simple que reinicia procesos si se caen cuando no hay bandeja.
