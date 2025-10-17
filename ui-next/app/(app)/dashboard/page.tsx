@@ -3,11 +3,18 @@ import { JobTable } from "@/components/job-table";
 import { Activity, Timer, FileText } from "lucide-react";
 
 async function fetchHealth() {
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4814"}/health`, { cache: "no-store" });
-  if (!response.ok) {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4814"}/health`, { cache: "no-store" });
+    if (!response.ok) {
+      return { status: "error", license: { plan: "desconocido" } };
+    }
+
+    const payload = await response.json();
+    return payload;
+  } catch (error) {
+    console.error("No se pudo obtener el estado del backend", error);
     return { status: "error", license: { plan: "desconocido" } };
   }
-  return response.json();
 }
 
 export default async function DashboardPage() {
