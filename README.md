@@ -15,6 +15,13 @@ que mantiene todo funcionando en segundo plano.
 | Licenciamiento | Tokens RS256 ligados a la huella del dispositivo. Gating por features (`summary:redactado`, `export:docx`, etc.) con gracia offline configurable. | Embebido |
 | Almacenamiento | `%APPDATA%/Transcriptor/` (o `~/.Transcriptor/`): `data/jobs`, `data/summaries`, `data/exports`, `logs`, `diagnostics`. | Disco local |
 
+Documentación detallada:
+
+- [Contrato de API](docs/api.md)
+- [Modelo de licencias y gating](docs/licencia.md)
+- [Política "Solo local"](docs/solo-local.md)
+- [Checklist de QA](QA/CHECKLIST.md)
+
 ## Requisitos
 
 - Python 3.9 o superior.
@@ -80,7 +87,7 @@ npm run dev
 - `Licencia`: estado actual, features activas, botón para revalidar.
 - `Logs`: documentación de la carpeta de diagnósticos y métricas locales.
 
-El frontend habla con el backend usando `NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:4814`).
+El frontend habla con el backend usando `NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:4814`). El valor se normaliza en `ui-next/lib/config.ts` para detectar puertos desalineados.
 
 ### Launcher con bandeja
 

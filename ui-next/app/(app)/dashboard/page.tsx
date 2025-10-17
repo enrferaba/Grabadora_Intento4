@@ -1,10 +1,11 @@
+import { API_ORIGIN } from "@/lib/config";
 import { StatCard } from "@/components/stat-card";
 import { JobTable } from "@/components/job-table";
 import { Activity, Timer, FileText } from "lucide-react";
 
 async function fetchHealth() {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4814"}/health`, { cache: "no-store" });
+    const response = await fetch(`${API_ORIGIN}/health`, { cache: "no-store" });
     if (!response.ok) {
       return { status: "error", license: { plan: "desconocido" } };
     }

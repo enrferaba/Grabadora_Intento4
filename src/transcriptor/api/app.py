@@ -16,7 +16,7 @@ from starlette import status
 
 from .. import __version__
 from ..config import ConfigManager, PATHS
-from ..constants import API_HOST, FRONTEND_PORT
+from ..constants import FRONTEND_ORIGIN
 from ..license_service import LicenseManager
 from ..logging_utils import configure_logging
 from ..transcription import GrammarCorrector, ModelProvider, OutputWriter, Transcriber
@@ -65,10 +65,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Transcriptor de FERIA", version=__version__)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            f"http://localhost:{FRONTEND_PORT}",
-            f"http://{API_HOST}:{FRONTEND_PORT}",
-        ],
+        allow_origins=[FRONTEND_ORIGIN],
         allow_methods=["*"],
         allow_headers=["*"],
         allow_credentials=True,
