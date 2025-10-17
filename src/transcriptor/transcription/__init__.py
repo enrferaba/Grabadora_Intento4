@@ -9,8 +9,8 @@ from typing import Any, Callable, Iterable, List, Optional, Tuple
 
 from pydub import AudioSegment
 
-from .config import PATHS
-from .logging_utils import configure_logging
+from ..config import PATHS
+from ..logging_utils import configure_logging
 
 logger = configure_logging()
 
