@@ -175,15 +175,15 @@ palabras, fallos del motor, incidencias de licencia).
 
 ## Desarrollo y tests
 
-- Verifica sintaxis rápidamente:
+- Revisa el backend de una vez con todas las comprobaciones locales:
 
   ```bash
-  python -m compileall src
+  python scripts/run_backend_checks.py
   ```
 
 - Ejecuta el backend + frontend en paralelo (`transcriptor api` y `npm run dev`).
 - Usa la ruta `/health` para comprobar integridad (incluye estado de licencia y versión).
-- Cada push y pull request se valida en GitHub Actions (`.github/workflows/ci.yml`) con `python -m compileall` y `npm run lint` para detectar errores en backend y frontend.
+- Cada push y pull request se valida en GitHub Actions (`.github/workflows/ci.yml`) ejecutando `scripts/run_backend_checks.py` para el backend y `npm run check` para el frontend, de modo que se reporten todos los fallos antes de marcar el pipeline como fallido.
 
 ## Script rápido en Windows
 
@@ -194,7 +194,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ./scripts/windows_quickstart.ps1
 ```
 
-El script instala dependencias, compila el backend, ejecuta el lint del frontend y muestra el estado de la licencia. Opcionalmente emite y verifica tokens si proporcionas `-PrivateKey`, `-PublicKey` y `-LicenseToken`.
+El script instala dependencias, lanza `scripts/run_backend_checks.py`, ejecuta las comprobaciones del frontend y muestra el estado de la licencia. Opcionalmente emite y verifica tokens si proporcionas `-PrivateKey`, `-PublicKey` y `-LicenseToken`.
 
 ## Próximos pasos
 

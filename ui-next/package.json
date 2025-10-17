@@ -6,7 +6,8 @@
     "dev": "next dev --hostname 127.0.0.1 --port 4815",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1 --port 4815",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check": "node scripts/run-checks.mjs"
   },
   "dependencies": {
     "@headlessui/react": "1.7.18",
