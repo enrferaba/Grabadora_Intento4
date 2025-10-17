@@ -4,16 +4,21 @@ import { Bell, Cpu } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function TopBar() {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
+    const update = () => setNow(new Date());
+
+    update();
+    const id = setInterval(update, 30_000);
     return () => clearInterval(id);
   }, []);
 
   return (
     <header className="flex items-center justify-between border-b border-zinc-800 bg-zinc-950/80 px-6 py-3">
-      <div className="text-sm text-zinc-400">{now.toLocaleString("es-ES")}</div>
+      <div className="text-sm text-zinc-400">
+        {now ? now.toLocaleString("es-ES") : "—"}
+      </div>
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1 text-xs text-zinc-300">
           <Cpu className="h-4 w-4" /> Solo local activo
