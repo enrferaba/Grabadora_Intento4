@@ -516,6 +516,7 @@ class TranscriptorApp:
         self.tree.tag_configure("ok", foreground=colors["accent"])
         self.tree.tag_configure("err", foreground=colors["danger"])
         self.tree.tag_configure("run", foreground=colors["accent-alt"])
+        self.tree.tag_configure("pending", foreground=colors["text-muted"])
 
     def _apply_palette(self, theme_name: str) -> None:
         colors = get_theme(theme_name).palette
@@ -757,7 +758,7 @@ class TranscriptorApp:
             self.queue.append(path)
             tag = "even" if len(self.tree.get_children()) % 2 == 0 else "odd"
             size_mb = f"{path.stat().st_size / (1024*1024):.2f} MB"
-            self.tree.insert("", tk.END, values=(path.name, size_mb, "Pendiente"), tags=(tag,))
+            self.tree.insert("", tk.END, values=(path.name, size_mb, "Pendiente"), tags=(tag, "pending"))
         self._update_process_button()
 
     def _remove_selected(self) -> None:
@@ -966,7 +967,11 @@ class TranscriptorApp:
             values = self.tree.item(item, "values")
             if values and values[0] == name:
                 self.tree.set(item, column="status", value=status)
-                self.tree.item(item, tags=(tag,))
+                current_tags = tuple(self.tree.item(item, "tags") or ())
+                base_tags = [t for t in current_tags if t in ("odd", "even")]
+                if not base_tags:
+                    base_tags = list(current_tags[:1])
+                self.tree.item(item, tags=tuple(base_tags + [tag]))
                 break
 
     # ------------------------------------------------------------------
