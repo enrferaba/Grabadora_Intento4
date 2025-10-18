@@ -39,7 +39,7 @@ cierra el acceso a las features premium hasta volver a validar.
 
 Los comandos `transcriptor licencia-emitir` y `transcriptor licencia-verificar` siguen disponibles. Generan archivos con firma HMAC
 compartida. Son útiles en entornos aislados donde no se quiere mantener infraestructura de claves públicas. El backend admite ambos
-formatos y prioriza el token firmado si existe.
+formatos y prioriza el token firmado si existe; si encuentra un JWT válido ignora automáticamente el archivo HMAC.
 
 ## Panel de licencia en la UI
 

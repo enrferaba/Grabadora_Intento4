@@ -1,3 +1,5 @@
+"use client";
+
 import { SummaryGenerator } from "@/components/summary-generator";
 
 export default function ResumenesPage() {

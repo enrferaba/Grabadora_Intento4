@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -19,7 +20,7 @@ except Exception:  # pragma: no cover - headless fallback
     Image = None  # type: ignore
     ImageDraw = None  # type: ignore
 
-from ..constants import API_HOST, API_PORT, FRONTEND_PORT
+from ..constants import API_HOST, API_PORT, DEV_FRONTEND_PORT
 from ..logging_utils import configure_logging
 
 logger = configure_logging()
@@ -29,8 +30,8 @@ logger = configure_logging()
 class LauncherConfig:
     host: str = API_HOST
     api_port: int = API_PORT
-    ui_port: int = FRONTEND_PORT
     auto_open: bool = True
+    launch_dev_ui: bool = False
 
 
 class Launcher:
@@ -38,6 +39,9 @@ class Launcher:
 
     def __init__(self, config: LauncherConfig | None = None) -> None:
         self.config = config or LauncherConfig()
+        env_toggle = os.environ.get("TRANSCRIPTOR_LAUNCHER_DEV_UI", "0").lower() in {"1", "true", "yes", "on"}
+        if env_toggle:
+            self.config.launch_dev_ui = True
         self._api_proc: Optional[subprocess.Popen] = None
         self._ui_proc: Optional[subprocess.Popen] = None
         self._tray_icon: Optional[pystray.Icon] = None if pystray else None
@@ -47,7 +51,8 @@ class Launcher:
     def start(self) -> None:
         logger.info("Iniciando launcher")
         self._start_api()
-        self._start_ui()
+        if self.config.launch_dev_ui:
+            self._start_ui()
         if self.config.auto_open:
             threading.Thread(target=self._open_browser, daemon=True).start()
         if pystray:
@@ -56,9 +61,25 @@ class Launcher:
             self._wait_for_processes()
 
     # ------------------------------------------------------------------
+    def _find_available_port(self, base_port: int) -> int:
+        for offset in range(3):
+            candidate = base_port + (offset * 2)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    sock.bind((self.config.host, candidate))
+                except OSError:
+                    continue
+                return candidate
+        return base_port
+
     def _start_api(self) -> None:
         if self._api_proc and self._api_proc.poll() is None:
             return
+        resolved_port = self._find_available_port(self.config.api_port)
+        if resolved_port != self.config.api_port:
+            logger.info("Puerto %s ocupado, usando %s", self.config.api_port, resolved_port)
+            self.config.api_port = resolved_port
         command = [
             sys.executable,
             "-m",
@@ -91,14 +112,14 @@ class Launcher:
             "--hostname",
             self.config.host,
             "--port",
-            str(self.config.ui_port),
+            str(DEV_FRONTEND_PORT),
         ]
         logger.info("Lanzando UI Next.js en %s", ui_root)
         self._ui_proc = subprocess.Popen(npm_command, cwd=str(ui_root))
 
     def _open_browser(self) -> None:
         time.sleep(1.0)
-        url = f"http://{self.config.host}:{self.config.ui_port}"
+        url = f"http://{self.config.host}:{self.config.api_port}"
         logger.info("Abriendo navegador en %s", url)
         webbrowser.open(url)
 
@@ -150,7 +171,7 @@ class Launcher:
                 if self._api_proc and self._api_proc.poll() is not None:
                     logger.warning("API detenida, intentando reinicio")
                     self._start_api()
-                if self._ui_proc and self._ui_proc.poll() is not None:
+                if self.config.launch_dev_ui and self._ui_proc and self._ui_proc.poll() is not None:
                     logger.warning("UI detenida, intentando reinicio")
                     self._start_ui()
         except KeyboardInterrupt:

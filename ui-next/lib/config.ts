@@ -1,6 +1,4 @@
-const DEFAULT_API_ORIGIN = "http://127.0.0.1:4814";
-
-function normaliseOrigin(origin: string): string {
+function normaliseOrigin(origin: string): string | null {
   try {
     const url = new URL(origin);
     url.pathname = "";
@@ -8,15 +6,18 @@ function normaliseOrigin(origin: string): string {
     url.hash = "";
     return url.toString().replace(/\/$/, "");
   } catch (_error) {
-    return DEFAULT_API_ORIGIN;
+    return null;
   }
 }
 
-export const API_ORIGIN = normaliseOrigin(
-  process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_ORIGIN,
-);
+const ENV_ORIGIN = process.env.NEXT_PUBLIC_API_URL?.trim();
+export const API_ORIGIN = ENV_ORIGIN ? normaliseOrigin(ENV_ORIGIN) ?? "" : "";
 
-if (process.env.NODE_ENV !== "production") {
+if (ENV_ORIGIN && !API_ORIGIN) {
+  console.warn(`[solo-local] NEXT_PUBLIC_API_URL inválida: ${ENV_ORIGIN}`);
+}
+
+if (API_ORIGIN && process.env.NODE_ENV !== "production") {
   try {
     const url = new URL(API_ORIGIN);
     if (url.hostname !== "127.0.0.1") {
@@ -25,8 +26,24 @@ if (process.env.NODE_ENV !== "production") {
       );
     }
   } catch (error) {
-    console.warn("[solo-local] NEXT_PUBLIC_API_URL inválida:", error);
+    console.warn("[solo-local] URL inválida para NEXT_PUBLIC_API_URL:", error);
   }
+}
+
+export function resolveApiOrigin(): string {
+  if (API_ORIGIN) {
+    return API_ORIGIN;
+  }
+  if (typeof window !== "undefined" && window.location) {
+    return window.location.origin.replace(/\/$/, "");
+  }
+  return "";
+}
+
+export function buildApiUrl(path: string): string {
+  const base = resolveApiOrigin();
+  const normalisedPath = path.startsWith("/") ? path : `/${path}`;
+  return base ? `${base}${normalisedPath}` : normalisedPath;
 }
 
 export const API_JSON_HEADERS = {

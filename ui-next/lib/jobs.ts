@@ -1,4 +1,4 @@
-import { API_ORIGIN } from "@/lib/config";
+import { buildApiUrl } from "@/lib/config";
 
 export type Job = {
   id: string;
@@ -14,7 +14,7 @@ export type JobsResponse = {
 };
 
 export async function fetchJobs(): Promise<JobsResponse> {
-  const response = await fetch(`${API_ORIGIN}/jobs`, { cache: "no-store" });
+  const response = await fetch(buildApiUrl("/jobs"), { cache: "no-store" });
   if (!response.ok) {
     throw new Error("No se pudieron cargar los trabajos");
   }

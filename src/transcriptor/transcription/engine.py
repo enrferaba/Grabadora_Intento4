@@ -66,6 +66,10 @@ class ModelProvider:
         self._cache: Optional[WhisperModel] = None
         self._key: Optional[str] = None
 
+    @property
+    def models_dir(self) -> Path:
+        return self._models_dir
+
     @staticmethod
     def has_cuda() -> bool:
         try:

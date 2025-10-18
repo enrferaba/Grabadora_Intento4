@@ -1,16 +1,16 @@
 # Transcriptor de FERIA 3.0
 
 Suite local para transcribir, resumir y exportar reuniones sin depender de servicios externos. Incluye un backend FastAPI en
-`127.0.0.1`, un frontend Next.js moderno en `http://localhost:4815`, un orquestador dual de resúmenes y un launcher con bandeja
-que mantiene todo funcionando en segundo plano.
+`127.0.0.1`, una build estática de Next.js servida desde el mismo origen, un orquestador dual de resúmenes y un launcher con
+bandeja que mantiene todo funcionando en segundo plano.
 
 ## Arquitectura
 
 | Capa | Descripción | Puerto |
 | --- | --- | --- |
-| Launcher | Arranca backend + frontend, abre el navegador, queda en bandeja y permite abrir/reiniciar/salir. | n/a |
-| API local (FastAPI) | Endpoints `health`, `transcribe`, `jobs`, `files`, `summarize`, `export`, `license/status`. Sólo escucha en `127.0.0.1`. | 4814 |
-| Frontend (Next.js + Tailwind + TanStack Query) | UI oscura con rutas `Dashboard`, `Transcribir`, `Jobs`, `Resúmenes`, `Ajustes`, `Licencia`, `Logs`. | 4815 |
+| Launcher | Arranca el backend, abre el navegador y permite abrir/reiniciar/salir. En modo desarrollo puede lanzar el servidor Next.js con `TRANSCRIPTOR_LAUNCHER_DEV_UI=1`. | n/a |
+| API local (FastAPI) | Endpoints `health`, `transcribe`, `jobs`, `files`, `summarize`, `export`, `license/status`, `__diag`, `__selftest`, `__doctor`. Sólo escucha en `127.0.0.1`. | 4814 |
+| Frontend (Next.js + Tailwind + TanStack Query) | Build estática servida por FastAPI en el mismo puerto. En desarrollo usa `npm run dev` en `127.0.0.1:4815`. | 4814 (prod) / 4815 (dev) |
 | Motor de resumen | Modelo local (heurístico en desarrollo) + fallback extractivo. Siempre produce un acta válida (titulo, claves, acciones, riesgos, próximos pasos). | Embebido |
 | Licenciamiento | Tokens RS256 ligados a la huella del dispositivo. Gating por features (`summary:redactado`, `export:docx`, etc.) con gracia offline configurable. | Embebido |
 | Almacenamiento | `%APPDATA%/Transcriptor/` (o `~/.Transcriptor/`): `data/jobs`, `data/summaries`, `data/exports`, `logs`, `diagnostics`. | Disco local |
@@ -68,6 +68,9 @@ Los endpoints principales:
 - `POST /summarize`
 - `POST /export`
 - `GET /license/status`
+- `GET /__diag` (requiere `Authorization: Bearer <token>` y la variable `TRANSCRIPTOR_DIAG_TOKEN`)
+- `POST /__selftest` (mismo token, ejecuta una transcripción corta embebida)
+- `POST /__doctor` (mismo token, genera un ZIP en `diagnostics/` con logs y manifiestos)
 
 Los jobs se procesan en segundo plano con `faster-whisper`, guardan TXT/SRT/JSON en `data/jobs/<id>/` y se purgan según la
 política de retención configurable.
@@ -76,7 +79,11 @@ política de retención configurable.
 
 ```bash
 cd ui-next
+# Desarrollo interactivo
 npm run dev
+
+# Build estática para empaquetado / FastAPI
+npm run export
 ```
 
 - `Dashboard`: estado API/licencia, métricas objetivo y tabla de jobs en vivo.
@@ -87,7 +94,7 @@ npm run dev
 - `Licencia`: estado actual, features activas, botón para revalidar.
 - `Logs`: documentación de la carpeta de diagnósticos y métricas locales.
 
-El frontend habla con el backend usando `NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:4814`). El valor se normaliza en `ui-next/lib/config.ts` para detectar puertos desalineados.
+El frontend habla con el backend usando rutas relativas. `NEXT_PUBLIC_API_URL` sólo es necesaria durante el desarrollo si apuntas a otro origen.
 
 ### Launcher con bandeja
 
@@ -95,9 +102,9 @@ El frontend habla con el backend usando `NEXT_PUBLIC_API_URL` (por defecto `http
 transcriptor launcher
 ```
 
-- Arranca `uvicorn transcriptor.api:app` en 127.0.0.1:4814.
-- Lanza `npm run dev -- --hostname 127.0.0.1 --port 4815` si detecta `ui-next/package.json` (puedes cambiar a un build estático para producción).
-- Abre el navegador en `http://localhost:4815`.
+- Arranca `uvicorn transcriptor.api:app` en 127.0.0.1:4814 (si el puerto está ocupado prueba 4816/4818).
+- En modo desarrollo (`TRANSCRIPTOR_LAUNCHER_DEV_UI=1`) lanza `npm run dev -- --hostname 127.0.0.1 --port 4815`.
+- Abre el navegador directamente en `http://127.0.0.1:<puerto_api>` para servir la build estática.
 - Crea un icono en la bandeja (si `pystray` + `Pillow` están disponibles) con acciones **Abrir**, **Reiniciar**, **Salir**.
 - Watchdog simple que reinicia procesos si se caen cuando no hay bandeja.
 
@@ -163,9 +170,15 @@ La clase `ConfigManager` guarda preferencias en `config.json` (tema, rutas favor
 carpeta de salida, retención). Los logs rotativos viven en `logs/app.log`. Se crean carpetas dedicadas para jobs, resúmenes,
 exports y diagnósticos.
 
-Para empaquetar un ZIP manual de soporte, comprime `logs/`, `data/jobs/` y `data/summaries/`. El panel **Logs** del frontend
-explica dónde se encuentran estos archivos y qué métricas se registran (tiempo de arranque, transcripción/minuto, resumen/1000
-palabras, fallos del motor, incidencias de licencia).
+Cada job escribe `manifest.json` junto a los artefactos TXT/SRT/JSON para que la cola sobreviva a reinicios. Las rutas de soporte
+incluyen:
+
+- `GET /__diag` → snapshot de versión, hardware, rutas y licencia (requiere `TRANSCRIPTOR_DIAG_TOKEN`).
+- `POST /__selftest` → ejecuta una transcripción de 2 segundos embebida para validar modelos/FFmpeg.
+- `POST /__doctor` → genera `diagnostics/doctor-<fecha>.zip` con logs, config y datos del último fallo.
+
+El panel **Logs** del frontend explica dónde se encuentran estos archivos y qué métricas se registran (tiempo de arranque,
+transcripción/minuto, resumen/1000 palabras, fallos del motor, incidencias de licencia).
 
 ## Empaquetado y distribución
 
@@ -174,7 +187,7 @@ palabras, fallos del motor, incidencias de licencia).
 3. Firma y distribuye los modelos `gguf` dentro de `PATHS.models_dir`. El backend verifica hashes antes de cargar.
 4. Crea un instalador único (MSI, Inno Setup, etc.) que copie:
    - Binarios Python + dependencias empaquetadas (o compila con PyInstaller si prefieres un único ejecutable del launcher).
-   - Carpeta `ui-next` ya build (`npm run build && next export` o `next start`).
+   - Carpeta `src/transcriptor/ui_static` resultante de `npm run export`.
    - Modelos y claves públicas.
    - Asociación `transcriptor://` y menú contextual "Transcribir con Transcriptor" (pendiente de implementación).
 
@@ -214,8 +227,7 @@ El script instala dependencias, lanza `scripts/run_backend_checks.py`, ejecuta l
 ## Próximos pasos
 
 - Sustituir el motor heurístico por un modelo cuantizado 7–8B integrado.
-- Servir el build estático del frontend directamente desde FastAPI (`StaticFiles`).
-- Añadir recogida de diagnósticos desde la UI (descarga ZIP).
+- Añadir una pestaña de diagnóstico en la UI para disparar `/__selftest` y descargar el ZIP del doctor.
 - Implementar asociaciones de archivo y protocolo `transcriptor://` en Windows/macOS.
 
 ---

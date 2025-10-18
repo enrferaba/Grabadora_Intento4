@@ -1,25 +1,15 @@
-import { API_ORIGIN } from "@/lib/config";
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/stat-card";
 import { JobTable } from "@/components/job-table";
 import { Activity, Timer, FileText } from "lucide-react";
+import { getHealth } from "@/lib/api";
 
-async function fetchHealth() {
-  try {
-    const response = await fetch(`${API_ORIGIN}/health`, { cache: "no-store" });
-    if (!response.ok) {
-      return { status: "error", license: { plan: "desconocido" } };
-    }
+export default function DashboardPage() {
+  const { data } = useQuery({ queryKey: ["health"], queryFn: getHealth, refetchInterval: 10000 });
 
-    const payload = await response.json();
-    return payload;
-  } catch (error) {
-    console.error("No se pudo obtener el estado del backend", error);
-    return { status: "error", license: { plan: "desconocido" } };
-  }
-}
-
-export default async function DashboardPage() {
-  const health = await fetchHealth();
+  const health = data ?? { status: "error", license: { plan: "desconocido" } };
 
   return (
     <div className="space-y-6">
@@ -28,7 +18,7 @@ export default async function DashboardPage() {
         <p className="text-sm text-zinc-500">Supervisa el estado del backend local y la cola de trabajos.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard title="Estado API" value={health.status === "ok" ? "Operativa" : "Revisar"} footer={`Licencia: ${health.license.plan ?? 'N/A'}`} icon={<Activity className="h-5 w-5 text-brand-500" />} />
+        <StatCard title="Estado API" value={health.status === "ok" ? "Operativa" : "Revisar"} footer={`Licencia: ${health.license?.plan ?? "N/A"}`} icon={<Activity className="h-5 w-5 text-brand-500" />} />
         <StatCard title="Tiempo medio de resumen" value="< 30 s" footer="Objetivo para reuniones de 15 min" icon={<Timer className="h-5 w-5 text-brand-500" />} />
         <StatCard title="Exportaciones disponibles" value="DOCX / MD / JSON" footer="Siempre offline" icon={<FileText className="h-5 w-5 text-brand-500" />} />
       </div>

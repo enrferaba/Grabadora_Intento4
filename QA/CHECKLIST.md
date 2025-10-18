@@ -9,8 +9,8 @@ Ejecuta estas pruebas antes de cada entrega:
    - `transcriptor api` debe levantar en `127.0.0.1:4814`.
    - `curl http://127.0.0.1:4814/health` responde `status":"ok"`.
 3. **Launcher**
-   - `transcriptor launcher` inicia API + frontend.
-   - Confirmar que abre navegador en `http://127.0.0.1:4815`.
+   - `transcriptor launcher` inicia API + frontend estático.
+   - Confirmar que abre el navegador en `http://127.0.0.1:<puerto_api>` y que respeta `TRANSCRIPTOR_LAUNCHER_DEV_UI=1`.
 4. **Frontend**
    - Dashboard sin errores de hidratación.
    - Subir un archivo pequeño y verificar creación de job.
@@ -23,7 +23,7 @@ Ejecuta estas pruebas antes de cada entrega:
    - Verifica que el resumen cae a modo extractivo si la feature premium falta.
 7. **Puerto ocupado**
    - Ocupa `4814` con `python -m http.server 4814`.
-   - Intentar arrancar backend: debe fallar con mensaje claro.
+   - Arranca el launcher: debe usar automáticamente `4816` (o `4818`) e informar en logs.
 8. **Modelos corruptos**
    - Corromper un archivo en `data/models`.
    - Lanzar transcripción: debe registrar el error y mostrar aviso en UI.
@@ -35,6 +35,9 @@ Ejecuta estas pruebas antes de cada entrega:
 11. **Exportaciones**
     - Generar resumen y exportar en Markdown, DOCX y JSON.
     - Abrir los archivos y revisar formato básico.
-12. **Diagnóstico**
+12. **Persistencia de jobs**
+    - Lanza una transcripción y espera a que finalice.
+    - Reinicia el backend y confirma que `/jobs` devuelve el job completado gracias a `manifest.json`.
+13. **Diagnóstico**
     - Ejecutar `scripts/run_backend_checks.py` y guardar salida.
-    - Comprimir `logs/` + `data/jobs/` y confirmar que la UI documenta la ruta.
+    - Con `TRANSCRIPTOR_DIAG_TOKEN`, invocar `/__diag`, `/__selftest` y `/__doctor`; confirmar que el ZIP aparece en `diagnostics/`.

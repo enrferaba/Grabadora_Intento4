@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { clsx } from "clsx";
-import { API_ORIGIN } from "@/lib/config";
+import { buildApiUrl } from "@/lib/config";
 
 export function TranscribeForm() {
   const [device, setDevice] = useState<"auto" | "cpu" | "cuda">("auto");
@@ -23,7 +23,7 @@ export function TranscribeForm() {
     formData.set("device", device);
     formData.set("vad", String(vad));
     try {
-      const response = await fetch(`${API_ORIGIN}/transcribe`, {
+      const response = await fetch(buildApiUrl("/transcribe"), {
         method: "POST",
         body: formData,
       });

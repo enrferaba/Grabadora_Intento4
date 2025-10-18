@@ -1,3 +1,5 @@
+"use client";
+
 export default function AjustesPage() {
   const preferences = [
     { title: "Carpeta de salida", description: "Define dónde se guardan transcripciones y resúmenes exportados." },

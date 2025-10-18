@@ -1,7 +1,9 @@
 # API local de Transcriptor de FERIA
 
 Todas las rutas viven bajo `http://127.0.0.1:4814` y requieren ejecutar `transcriptor api` o el launcher.
-Nunca se exponen a internet: sólo aceptan conexiones en `127.0.0.1` y se validan en el frontend mediante `NEXT_PUBLIC_API_URL`.
+Nunca se exponen a internet: sólo aceptan conexiones en `127.0.0.1`.
+
+Por defecto la documentación interactiva de FastAPI (`/docs` y `/openapi.json`) está deshabilitada. Puedes habilitarla temporalmente con `TRANSCRIPTOR_DOCS=1 uvicorn transcriptor.api:app`.
 
 ## Autenticación y cabeceras
 
@@ -101,6 +103,57 @@ Devuelve un `application/octet-stream` descargable.
 
 Expone el estado de la licencia local, incluyendo si está en período de gracia y las features disponibles.
 
+### GET /__diag
+
+Devuelve un snapshot del sistema. Requiere enviar `Authorization: Bearer <token>` donde el token coincide con `TRANSCRIPTOR_DIAG_TOKEN`.
+
+```json
+{
+  "timestamp": "2024-10-17T16:28:12.123456",
+  "version": "3.0.0",
+  "python": "3.11.7 (tags/v3.11.7:...)",
+  "platform": {"system": "Windows", "release": "11", "machine": "AMD64"},
+  "paths": {
+    "base": "C:/Users/Usuario/AppData/Roaming/Transcriptor",
+    "jobs": ".../data/jobs",
+    "logs": ".../logs",
+    "diagnostics": ".../diagnostics",
+    "models": ".../models"
+  },
+  "license": {
+    "active": true,
+    "plan": "pro",
+    "features": ["summary:redactado", "export:docx"]
+  },
+  "hardware": {"cuda": false, "ffmpeg": null},
+  "jobs": {"total": 3, "failed": 0},
+  "models_present": ["medium", "small"],
+  "solo_local": true
+}
+```
+
+### POST /__selftest
+
+Ejecuta una transcripción corta embebida para validar que el modelo y FFmpeg están disponibles. Requiere el mismo encabezado `Authorization: Bearer <token>`.
+
+```json
+{
+  "status": "ok",
+  "result": {
+    "model": "small",
+    "elapsed": 1.82,
+    "duration": 2.0,
+    "text": ""
+  }
+}
+```
+
+Si no hay modelos descargados responde `412 Precondition Failed` con un mensaje orientativo.
+
+### POST /__doctor
+
+Genera un paquete ZIP en `diagnostics/doctor-<fecha>.zip` con `system.json`, `config.json`, `logs/app.log` (si existe), `models_manifest.json` y el último job fallido. Requiere el encabezado `Authorization` con el token configurado en `TRANSCRIPTOR_DIAG_TOKEN`.
+
 ## Códigos de error
 
 - `400 Bad Request`: parámetros inválidos o job inexistente.
@@ -110,5 +163,4 @@ Expone el estado de la licencia local, incluyendo si está en período de gracia
 
 ## Contrato compartido con el frontend
 
-El frontend obtiene la URL base desde `NEXT_PUBLIC_API_URL`. Se normaliza y se advierte en consola si no apunta a `127.0.0.1`.
-De esta manera cualquier discrepancia de puerto se detecta antes de que el usuario abra la UI.
+El frontend utiliza rutas relativas contra el mismo origen. `NEXT_PUBLIC_API_URL` sólo se usa en desarrollo para apuntar a un backend distinto.

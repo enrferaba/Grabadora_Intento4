@@ -1,3 +1,5 @@
+"use client";
+
 import { LicensePanel } from "@/components/license-panel";
 
 export default function LicenciaPage() {

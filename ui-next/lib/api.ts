@@ -1,7 +1,7 @@
-import { API_JSON_HEADERS, API_ORIGIN } from "@/lib/config";
+import { API_JSON_HEADERS, buildApiUrl } from "@/lib/config";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_ORIGIN}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     ...init,
     headers: {
       ...API_JSON_HEADERS,

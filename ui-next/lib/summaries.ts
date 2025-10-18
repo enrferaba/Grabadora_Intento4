@@ -1,4 +1,4 @@
-import { API_JSON_HEADERS, API_ORIGIN } from "@/lib/config";
+import { API_JSON_HEADERS, buildApiUrl } from "@/lib/config";
 
 export type SummaryRequest = {
   job_id: string;
@@ -27,7 +27,7 @@ export type SummaryResponse = {
 };
 
 export async function createSummary(body: SummaryRequest): Promise<SummaryResponse> {
-  const response = await fetch(`${API_ORIGIN}/summarize`, {
+  const response = await fetch(buildApiUrl("/summarize"), {
     method: "POST",
     headers: API_JSON_HEADERS,
     body: JSON.stringify(body),
@@ -39,7 +39,7 @@ export async function createSummary(body: SummaryRequest): Promise<SummaryRespon
 }
 
 export async function exportSummary(body: SummaryRequest & { format: "markdown" | "docx" | "json" }): Promise<Blob> {
-  const response = await fetch(`${API_ORIGIN}/export`, {
+  const response = await fetch(buildApiUrl("/export"), {
     method: "POST",
     headers: API_JSON_HEADERS,
     body: JSON.stringify(body),
