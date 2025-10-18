@@ -1,3 +1,5 @@
+"use client";
+
 export default function LogsPage() {
   return (
     <div className="space-y-4">
