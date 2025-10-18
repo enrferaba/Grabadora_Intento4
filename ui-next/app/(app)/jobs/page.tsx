@@ -1,3 +1,5 @@
+"use client";
+
 import { JobTable } from "@/components/job-table";
 
 export default function JobsPage() {

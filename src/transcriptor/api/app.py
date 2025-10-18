@@ -2,24 +2,39 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import os
+import platform
+import sys
 import threading
 import time
+import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import (
+    BackgroundTasks,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from starlette import status
 
 from .. import __version__
 from ..config import ConfigManager, PATHS
+from ..constants import UI_DIST_PATH
 from ..license_service import LicenseManager
 from ..logging_utils import configure_logging
-from ..transcription import GrammarCorrector, ModelProvider, OutputWriter, Transcriber
-from ..transcription import Segment
+from ..transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
+from ..summarizer import ActionItem, SummaryDocument, SummaryOrchestrator, export_document, get_template
+from ._selftest_audio import SELFTEST_WAV_BASE64
 from .jobs import JobArtifact, JobStatus, JobStore
 from .models import (
     ExportRequest,
@@ -30,10 +45,13 @@ from .models import (
     SummaryResponse,
     TranscriptionJobResponse,
 )
-from ..summarizer import ActionItem, SummaryDocument, SummaryOrchestrator, export_document, get_template
 
 
 logger = configure_logging()
+
+
+DOCS_ENABLED = os.environ.get("TRANSCRIPTOR_DOCS", "0").lower() in {"1", "true", "yes", "on"}
+DIAG_TOKEN = os.environ.get("TRANSCRIPTOR_DIAG_TOKEN")
 
 
 class BackendContext:
@@ -60,15 +78,98 @@ class BackendContext:
 CONTEXT = BackendContext()
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="Transcriptor de FERIA", version=__version__)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["http://localhost", "http://localhost:4815", "http://127.0.0.1"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-        allow_credentials=True,
+def _require_diag_token(request: Request) -> None:
+    if not DIAG_TOKEN:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Diagnóstico deshabilitado")
+    header = request.headers.get("Authorization") or request.headers.get("X-Transcriptor-Diag")
+    if not header:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de diagnóstico requerido")
+    token = header.replace("Bearer ", "").strip()
+    if token != DIAG_TOKEN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token de diagnóstico inválido")
+
+
+def _diagnostic_snapshot() -> Dict[str, Any]:
+    license_status = CONTEXT.license.status().as_dict()
+    models_dir = CONTEXT.model_provider.models_dir
+    available_models: Iterable[str] = []
+    if models_dir.is_dir():
+        available_models = sorted({candidate.parent.name for candidate in models_dir.glob("*/model.bin")})
+    jobs_snapshot = CONTEXT.jobs.list()
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": __version__,
+        "python": sys.version,
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+        },
+        "paths": {
+            "base": str(PATHS.base_dir),
+            "jobs": str(PATHS.jobs_dir),
+            "logs": str(PATHS.log_dir),
+            "diagnostics": str(PATHS.diagnostics_dir),
+            "models": str(models_dir),
+        },
+        "license": license_status,
+        "hardware": {
+            "cuda": CONTEXT.model_provider.has_cuda(),
+            "ffmpeg": str(PATHS.ffmpeg_executable) if PATHS.ffmpeg_executable else None,
+        },
+        "jobs": {
+            "total": len(jobs_snapshot),
+            "failed": sum(1 for job in jobs_snapshot if job.status == JobStatus.FAILED),
+        },
+        "solo_local": True,
+        "models_present": list(available_models),
+    }
+
+
+def _decode_selftest_audio() -> Path:
+    target = PATHS.diagnostics_dir / "selftest.wav"
+    if not target.exists():
+        data = base64.b64decode(SELFTEST_WAV_BASE64)
+        target.write_bytes(data)
+    return target
+
+
+def _run_selftest(model_name: str | None = None) -> Dict[str, Any]:
+    models_dir = CONTEXT.model_provider.models_dir
+    if model_name is None:
+        candidates = [folder.name for folder in models_dir.iterdir() if (folder / "model.bin").exists()]
+        if not candidates:
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail="No hay modelos descargados. Descarga uno antes de ejecutar el autodiagnóstico.",
+            )
+        model_name = sorted(candidates)[0]
+
+    audio_path = _decode_selftest_audio()
+    cancel_event = threading.Event()
+    text, segments, elapsed = CONTEXT.transcriber.transcribe(
+        audio_path,
+        model_name=model_name,
+        device=CONTEXT.device_for("auto"),
+        language="es",
+        vad_filter=True,
+        beam_size=1,
+        cancel_event=cancel_event,
     )
+    duration = segments[-1].end if segments else 0.0
+    return {
+        "model": model_name,
+        "elapsed": elapsed,
+        "duration": duration,
+        "text": text.strip(),
+    }
+
+
+def create_app() -> FastAPI:
+    openapi_url = "/openapi.json" if DOCS_ENABLED else None
+    docs_url = "/docs" if DOCS_ENABLED else None
+    app = FastAPI(title="Transcriptor de FERIA", version=__version__, openapi_url=openapi_url, docs_url=docs_url, redoc_url=None)
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -351,6 +452,61 @@ def create_app() -> FastAPI:
     async def license_status() -> LicenseStatusPayload:
         status_payload = CONTEXT.license.status().as_dict()
         return LicenseStatusPayload(**status_payload)
+
+    @app.get("/__diag")
+    async def diagnostics(request: Request) -> Dict[str, Any]:
+        _require_diag_token(request)
+        return _diagnostic_snapshot()
+
+    @app.post("/__selftest")
+    async def selftest(request: Request) -> Dict[str, Any]:
+        _require_diag_token(request)
+        content_type = request.headers.get("content-type", "").lower()
+        body = await request.json() if content_type.startswith("application/json") else {}
+        model_name = body.get("model") if isinstance(body, dict) else None
+        result = await asyncio.to_thread(_run_selftest, model_name)
+        return {"status": "ok", "result": result}
+
+    @app.post("/__doctor")
+    async def doctor(request: Request) -> Dict[str, Any]:
+        _require_diag_token(request)
+        snapshot = _diagnostic_snapshot()
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        PATHS.diagnostics_dir.mkdir(parents=True, exist_ok=True)
+        bundle_path = PATHS.diagnostics_dir / f"doctor-{timestamp}.zip"
+        with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("system.json", json.dumps(snapshot, ensure_ascii=False, indent=2))
+            if PATHS.config_file.exists():
+                archive.write(PATHS.config_file, arcname="config.json")
+            if PATHS.log_file.exists():
+                archive.write(PATHS.log_file, arcname="logs/app.log")
+            models_manifest = {
+                "models": [folder.name for folder in CONTEXT.model_provider.models_dir.iterdir() if folder.is_dir()],
+            }
+            archive.writestr("models_manifest.json", json.dumps(models_manifest, ensure_ascii=False, indent=2))
+            failed_jobs = [job for job in CONTEXT.jobs.list() if job.status == JobStatus.FAILED]
+            if failed_jobs:
+                latest = failed_jobs[0]
+                archive.writestr(
+                    "last_failed_job.json",
+                    json.dumps(latest.as_dict(), ensure_ascii=False, default=str, indent=2),
+                )
+        return {"status": "ok", "bundle": str(bundle_path)}
+
+    if UI_DIST_PATH.is_dir() and any(UI_DIST_PATH.iterdir()):
+        app.mount(
+            "/",
+            StaticFiles(directory=str(UI_DIST_PATH), html=True),
+            name="frontend",
+        )
+    else:
+        @app.get("/", response_class=HTMLResponse)
+        async def placeholder() -> HTMLResponse:
+            return HTMLResponse(
+                """<html><body style='font-family: sans-serif; padding: 2rem;'>"
+                "<h1>Transcriptor de FERIA</h1><p>Compila la UI con <code>npm run build && npx next export</code> "
+                "y establece TRANSCRIPTOR_UI_DIST apuntando a la carpeta exportada.</p></body></html>"""
+            )
 
     return app
 

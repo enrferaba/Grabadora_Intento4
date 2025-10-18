@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { clsx } from "clsx";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4814";
+import { buildApiUrl } from "@/lib/config";
 
 export function TranscribeForm() {
   const [device, setDevice] = useState<"auto" | "cpu" | "cuda">("auto");
@@ -24,9 +23,9 @@ export function TranscribeForm() {
     formData.set("device", device);
     formData.set("vad", String(vad));
     try {
-      const response = await fetch(`${API_BASE}/transcribe`, {
+      const response = await fetch(buildApiUrl("/transcribe"), {
         method: "POST",
-        body: formData
+        body: formData,
       });
       if (!response.ok) {
         throw new Error("Error al subir el audio");
