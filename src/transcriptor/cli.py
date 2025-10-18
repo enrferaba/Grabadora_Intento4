@@ -56,6 +56,8 @@ if "API_HOST" not in globals():  # pragma: no cover - defensive default during p
     API_PORT = 4814
 
 app = typer.Typer(add_completion=False, help="Herramientas administrativas para Transcriptor de FERIA")
+doctor_app = typer.Typer(help="Diagnóstico y mantenimiento")
+app.add_typer(doctor_app, name="doctor")
 
 
 @app.command("gui")
@@ -104,6 +106,66 @@ def run_launcher_cmd() -> None:
 def show_disclaimer() -> None:
     """Muestra el descargo de responsabilidad que reciben los usuarios finales."""
     print(Panel.fit(DISCLAIMER_TEXT, title="Descargo de responsabilidad", border_style="yellow"))
+
+
+@doctor_app.command("limpiar-editables")
+def doctor_clean_editables(
+    apply: bool = typer.Option(False, "--apply", help="Elimina los artefactos detectados"),
+    json_output: bool = typer.Option(False, "--json", help="Muestra la salida en JSON"),
+) -> None:
+    """Detecta y limpia instalaciones editables antiguas que pisan el paquete actual."""
+
+    from .devtools import detect_editable_artifacts, remove_artifacts
+
+    artifacts = detect_editable_artifacts()
+
+    if json_output:
+        typer.echo(json.dumps([item.to_dict() for item in artifacts], ensure_ascii=False, indent=2))
+        return
+
+    if not artifacts:
+        typer.secho("No se detectaron restos de instalaciones anteriores.", fg="green")
+        return
+
+    typer.echo("Se encontraron artefactos ajenos al repositorio actual:\n")
+    for artifact in artifacts:
+        detail = f" ({artifact.detail})" if artifact.detail else ""
+        typer.echo(f" - {artifact.kind}: {artifact.path}{detail}")
+
+    if not apply:
+        typer.secho(
+            "\nNo se eliminaron archivos. Ejecuta con --apply para realizar la limpieza.",
+            fg="yellow",
+        )
+        return
+
+    typer.echo("\nEliminando artefactos obsoletos...\n")
+    results = remove_artifacts(artifacts)
+    exit_code = 0
+    for artifact, success, error in results:
+        detail = f" ({artifact.detail})" if artifact.detail else ""
+        if success:
+            typer.secho(f" - {artifact.kind}: {artifact.path}{detail} -> OK", fg="green")
+        else:
+            exit_code = 1
+            typer.secho(
+                f" - {artifact.kind}: {artifact.path}{detail} -> ERROR: {error or 'desconocido'}",
+                fg="red",
+                err=True,
+            )
+
+    if exit_code:
+        typer.secho(
+            "\nQuedaron archivos sin eliminar. Revisa los permisos o bórralos manualmente.",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    typer.secho(
+        "\nLimpieza completada. Reinstala con 'pip install -e .' para sincronizar el paquete.",
+        fg="green",
+    )
 
 
 @app.command("licencia-emitir")

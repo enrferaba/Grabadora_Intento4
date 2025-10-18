@@ -39,10 +39,19 @@ python -m pip install -e .
 Si vienes de una instalación previa, limpia primero cualquier editable viejo para evitar rutas duplicadas:
 
 ```bash
-python -m pip uninstall -y transcriptor-feria
+# Lista artefactos que no apuntan a esta copia del repositorio
+python scripts/clean_editable.py
+
+# Elimina los artefactos detectados y vuelve a instalar en editable
+python scripts/clean_editable.py --apply
 python -m pip install -e .
-python -m pip show transcriptor-feria  # verifica que Location apunte a este repo
+
+# Confirmación final
+python -m pip show transcriptor-feria
 ```
+
+También puedes ejecutar `transcriptor doctor limpiar-editables` (con `--apply`) desde cualquier entorno donde el paquete se haya
+instalado para realizar la misma limpieza.
 
 Instala también las dependencias del frontend si vas a trabajar la UI:
 
