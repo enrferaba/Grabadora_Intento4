@@ -63,6 +63,7 @@ export function TranscribeForm() {
           type="file"
           name="file"
           accept="audio/*,video/*"
+          ref={fileInputRef}
           className="mt-2 w-full rounded border border-dashed border-zinc-700 bg-zinc-950 px-4 py-6 text-sm text-zinc-400 file:hidden"
         />
         <p className="mt-2 text-xs text-zinc-500">
