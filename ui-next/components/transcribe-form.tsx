@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { clsx } from "clsx";
 import { buildApiUrl } from "@/lib/config";
 
 export function TranscribeForm() {
+  const formRef = useRef<HTMLFormElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [device, setDevice] = useState<"auto" | "cpu" | "cuda">("auto");
   const [vad, setVad] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -12,10 +14,13 @@ export function TranscribeForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
+    const form = formRef.current;
+    if (!form) {
+      return;
+    }
     const formData = new FormData(form);
-    const file = formData.get("file") as File | null;
-    if (!file) {
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
       setMessage("Selecciona un audio para comenzar");
       return;
     }
@@ -33,6 +38,11 @@ export function TranscribeForm() {
       }
       setMessage("Trabajo enviado a la cola. Revisa la pestaña Jobs.");
       form.reset();
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setDevice("auto");
+      setVad(true);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -41,13 +51,14 @@ export function TranscribeForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
       <div>
         <label className="text-sm font-medium text-white">Archivo de audio o video</label>
         <input
           type="file"
           name="file"
           accept="audio/*,video/*"
+          ref={fileInputRef}
           className="mt-2 w-full rounded border border-dashed border-zinc-700 bg-zinc-950 px-4 py-6 text-sm text-zinc-400 file:hidden"
         />
         <p className="mt-2 text-xs text-zinc-500">Arrastra y suelta o haz clic para seleccionar. Se procesa 100% en local.</p>
