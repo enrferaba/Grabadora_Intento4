@@ -14,8 +14,8 @@ export function TranscribeForm() {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const file = formData.get("file") as File | null;
-    if (!file) {
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
       setMessage("Selecciona un audio para comenzar");
       return;
     }
@@ -33,6 +33,12 @@ export function TranscribeForm() {
       }
       setMessage("Trabajo enviado a la cola. Revisa la pestaña Jobs.");
       form.reset();
+      const input = form.querySelector<HTMLInputElement>('input[type="file"]');
+      if (input) {
+        input.value = "";
+      }
+      setDevice("auto");
+      setVad(true);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
