@@ -1,4 +1,4 @@
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4814";
+import { buildApiUrl } from "@/lib/config";
 
 export type LicenseStatus = {
   active: boolean;
@@ -10,7 +10,7 @@ export type LicenseStatus = {
 };
 
 export async function fetchLicenseStatus(): Promise<LicenseStatus> {
-  const response = await fetch(`${BASE}/license/status`, { cache: "no-store" });
+  const response = await fetch(buildApiUrl("/license/status"), { cache: "no-store" });
   if (!response.ok) {
     throw new Error("No se pudo obtener el estado de la licencia");
   }

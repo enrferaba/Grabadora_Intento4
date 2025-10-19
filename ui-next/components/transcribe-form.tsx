@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { clsx } from "clsx";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4814";
+import { buildApiUrl } from "@/lib/config";
 
 export function TranscribeForm() {
   const [device, setDevice] = useState<"auto" | "cpu" | "cuda">("auto");
@@ -13,7 +12,8 @@ export function TranscribeForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const file = formData.get("file") as File | null;
     if (!file) {
       setMessage("Selecciona un audio para comenzar");
@@ -24,15 +24,15 @@ export function TranscribeForm() {
     formData.set("device", device);
     formData.set("vad", String(vad));
     try {
-      const response = await fetch(`${API_BASE}/transcribe`, {
+      const response = await fetch(buildApiUrl("/transcribe"), {
         method: "POST",
-        body: formData
+        body: formData,
       });
       if (!response.ok) {
         throw new Error("Error al subir el audio");
       }
       setMessage("Trabajo enviado a la cola. Revisa la pestaña Jobs.");
-      event.currentTarget.reset();
+      form.reset();
     } catch (error) {
       setMessage((error as Error).message);
     } finally {

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 4815",
     "build": "next build",
+    "export": "next build",
     "start": "next start --hostname 127.0.0.1 --port 4815",
     "lint": "next lint",
     "check": "node scripts/run-checks.mjs"

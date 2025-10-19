@@ -1,3 +1,5 @@
+import { API_JSON_HEADERS, buildApiUrl } from "@/lib/config";
+
 export type SummaryRequest = {
   job_id: string;
   template: "atencion" | "comercial" | "soporte";
@@ -24,13 +26,11 @@ export type SummaryResponse = {
   next_steps: string[];
 };
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:4814";
-
 export async function createSummary(body: SummaryRequest): Promise<SummaryResponse> {
-  const response = await fetch(`${BASE}/summarize`, {
+  const response = await fetch(buildApiUrl("/summarize"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    headers: API_JSON_HEADERS,
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error("No se pudo generar el resumen");
@@ -39,10 +39,10 @@ export async function createSummary(body: SummaryRequest): Promise<SummaryRespon
 }
 
 export async function exportSummary(body: SummaryRequest & { format: "markdown" | "docx" | "json" }): Promise<Blob> {
-  const response = await fetch(`${BASE}/export`, {
+  const response = await fetch(buildApiUrl("/export"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    headers: API_JSON_HEADERS,
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error("No se pudo exportar el resumen");
