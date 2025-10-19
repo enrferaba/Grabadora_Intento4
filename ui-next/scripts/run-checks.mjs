@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 
-const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const isWindows = process.platform === 'win32';
+const npmCmd = 'npm';
+const npxCmd = 'npx';
 
 const tasks = [
   { title: 'Lint', command: npmCmd, args: ['run', 'lint'] },
@@ -14,7 +15,7 @@ async function runTask({ title, command, args }) {
   console.log(`\n==> ${title}`);
   console.log(`$ ${[command, ...args].join(' ')}`);
   return await new Promise(resolve => {
-    const child = spawn(command, args, { stdio: 'inherit', shell: false });
+    const child = spawn(command, args, { stdio: 'inherit', shell: isWindows });
     child.on('close', code => {
       const status = code === 0 ? 'OK' : `FALLO (${code})`;
       console.log(`-- Resultado: ${status}`);

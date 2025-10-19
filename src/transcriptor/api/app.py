@@ -27,6 +27,8 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette import status
 
+from pydub.exceptions import CouldntDecodeError
+
 from .. import __version__
 from ..config import ConfigManager, PATHS
 from ..constants import UI_DIST_PATH
@@ -52,6 +54,20 @@ logger = configure_logging()
 
 DOCS_ENABLED = os.environ.get("TRANSCRIPTOR_DOCS", "0").lower() in {"1", "true", "yes", "on"}
 DIAG_TOKEN = os.environ.get("TRANSCRIPTOR_DIAG_TOKEN")
+ALLOWED_UPLOAD_SUFFIXES = {
+    ".aac",
+    ".flac",
+    ".m4a",
+    ".mkv",
+    ".mov",
+    ".mp3",
+    ".mp4",
+    ".ogg",
+    ".opus",
+    ".wav",
+    ".webm",
+    ".wma",
+}
 
 
 class BackendContext:
@@ -177,10 +193,29 @@ def create_app() -> FastAPI:
         return HealthResponse(status="ok", time=datetime.utcnow(), version=__version__, license=status_payload)
 
     # ------------------------------------------------------------------
+    def _normalise_suffix(filename: str | None) -> str:
+        if not filename:
+            return ".wav"
+        suffix = Path(filename).suffix.lower()
+        if suffix in ALLOWED_UPLOAD_SUFFIXES:
+            return suffix
+        return ".wav"
+
     async def _persist_upload(job_id: str, upload: UploadFile) -> Path:
         job_dir = PATHS.jobs_dir / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
-        suffix = Path(upload.filename or "audio").suffix or ".bin"
+        content_type = (upload.content_type or "").lower()
+        if content_type and not (
+            content_type.startswith("audio/")
+            or content_type.startswith("video/")
+            or content_type in {"application/octet-stream"}
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail=f"Tipo no soportado: {upload.content_type}",
+            )
+
+        suffix = _normalise_suffix(upload.filename)
         path = job_dir / f"entrada{suffix}"
         with path.open("wb") as target:
             while True:
@@ -189,6 +224,19 @@ def create_app() -> FastAPI:
                     break
                 target.write(chunk)
         await upload.close()
+        size = path.stat().st_size
+        if size == 0:
+            path.unlink(missing_ok=True)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo subido está vacío")
+        with path.open("rb") as source:
+            sample = source.read(512)
+        if size < 128 or sample.lstrip().startswith((b"<!", b"<html", b"{", b"[")):
+            path.unlink(missing_ok=True)
+            snippet = sample[:64]
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Contenido no válido (primeros bytes: {snippet!r})",
+            )
         return path
 
     async def _run_transcription(job_id: str, audio_path: Path, options: Dict[str, Any]) -> None:
@@ -254,6 +302,13 @@ def create_app() -> FastAPI:
             )
 
             CONTEXT.jobs.set_status(job_id, JobStatus.COMPLETED, message="Transcripción lista")
+        except CouldntDecodeError as exc:  # pragma: no cover - runtime safeguard
+            logger.warning("No se pudo decodificar el audio %s: %s", audio_path, exc)
+            CONTEXT.jobs.set_status(
+                job_id,
+                JobStatus.FAILED,
+                message="No se pudo leer el audio. Comprueba que el archivo sea un formato compatible.",
+            )
         except Exception as exc:  # pragma: no cover - runtime safeguard
             logger.exception("Error transcribiendo %s", audio_path)
             CONTEXT.jobs.set_status(job_id, JobStatus.FAILED, message=str(exc))
