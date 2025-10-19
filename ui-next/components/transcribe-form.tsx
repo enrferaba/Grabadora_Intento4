@@ -6,7 +6,7 @@ import { buildApiUrl } from "@/lib/config";
 
 export function TranscribeForm() {
   const formRef = useRef<HTMLFormElement | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [device, setDevice] = useState<"auto" | "cpu" | "cuda">("auto");
   const [vad, setVad] = useState(true);
@@ -16,7 +16,7 @@ export function TranscribeForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const file = fileRef.current?.files?.[0] ?? null;
+    const file = fileInputRef.current?.files?.[0] ?? null;
     if (!file) {
       setMessage("Selecciona un audio para comenzar");
       return;
@@ -44,7 +44,7 @@ export function TranscribeForm() {
       setUploading(false);
 
       formRef.current?.reset();
-      if (fileRef.current) fileRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
       setDevice("auto");
       setVad(true);
     }
@@ -59,7 +59,7 @@ export function TranscribeForm() {
       <div>
         <label className="text-sm font-medium text-white">Archivo de audio o video</label>
         <input
-          ref={fileRef}
+          ref={fileInputRef}
           type="file"
           name="file"
           accept="audio/*,video/*"

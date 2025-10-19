@@ -27,6 +27,8 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette import status
 
+from pydub.exceptions import CouldntDecodeError
+
 from .. import __version__
 from ..config import ConfigManager, PATHS
 from ..constants import UI_DIST_PATH
@@ -226,13 +228,14 @@ def create_app() -> FastAPI:
         if size == 0:
             path.unlink(missing_ok=True)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo subido está vacío")
-        if size < 128:
-            with path.open("rb") as source:
-                sample = source.read(64)
+        with path.open("rb") as source:
+            sample = source.read(512)
+        if size < 128 or sample.lstrip().startswith((b"<!", b"<html", b"{", b"[")):
             path.unlink(missing_ok=True)
+            snippet = sample[:64]
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Contenido no válido (primeros bytes: {sample!r})",
+                detail=f"Contenido no válido (primeros bytes: {snippet!r})",
             )
         return path
 
@@ -299,6 +302,13 @@ def create_app() -> FastAPI:
             )
 
             CONTEXT.jobs.set_status(job_id, JobStatus.COMPLETED, message="Transcripción lista")
+        except CouldntDecodeError as exc:  # pragma: no cover - runtime safeguard
+            logger.warning("No se pudo decodificar el audio %s: %s", audio_path, exc)
+            CONTEXT.jobs.set_status(
+                job_id,
+                JobStatus.FAILED,
+                message="No se pudo leer el audio. Comprueba que el archivo sea un formato compatible.",
+            )
         except Exception as exc:  # pragma: no cover - runtime safeguard
             logger.exception("Error transcribiendo %s", audio_path)
             CONTEXT.jobs.set_status(job_id, JobStatus.FAILED, message=str(exc))
