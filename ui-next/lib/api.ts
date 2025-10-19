@@ -1,5 +1,16 @@
 import { API_JSON_HEADERS, buildApiUrl } from "@/lib/config";
 
+export interface HealthResponse {
+  status: "ok" | "degraded" | "error";
+  time: string;
+  version: string;
+  license: { active: boolean; plan: string; [key: string]: unknown };
+  cuda_available: boolean;
+  vad_available: boolean;
+  missing_vad_assets: string[];
+  ffmpeg_path: string | null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(buildApiUrl(path), {
     ...init,
@@ -16,5 +27,5 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function getHealth() {
-  return request<{ status: string; license: { active: boolean; plan: string } }>("/health");
+  return request<HealthResponse>("/health");
 }

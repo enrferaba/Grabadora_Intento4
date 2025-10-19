@@ -1,14 +1,18 @@
 """Typer command line interface for administrative utilities."""
 from __future__ import annotations
 
+import base64
 import json
 import sys
+import threading
 from pathlib import Path
 from typing import Optional
 
 import typer
 from rich import print
+from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 fastapi_app = None  # type: ignore[assignment]
@@ -58,6 +62,16 @@ if "API_HOST" not in globals():  # pragma: no cover - defensive default during p
 app = typer.Typer(add_completion=False, help="Herramientas administrativas para Transcriptor de FERIA")
 doctor_app = typer.Typer(help="Diagnóstico y mantenimiento")
 app.add_typer(doctor_app, name="doctor")
+
+console = Console()
+
+
+def _resolve_device(device: str, provider: "ModelProvider") -> str:
+    if device not in {"cpu", "cuda", "auto"}:
+        return "cpu"
+    if device == "auto":
+        return "cuda" if provider.has_cuda() else "cpu"
+    return device
 
 
 @app.command("gui")
@@ -167,6 +181,102 @@ def doctor_clean_editables(
         fg="green",
     )
 
+
+@doctor_app.command("estado")
+def doctor_status() -> None:
+    """Muestra la disponibilidad de CUDA, VAD y FFmpeg."""
+
+    from .config import PATHS
+    from .transcription import ModelProvider, Transcriber
+
+    provider = ModelProvider(PATHS.models_dir)
+    transcriber = Transcriber(provider)
+    transcriber.ensure_vad_assets()
+
+    table = Table(title="Diagnóstico de hardware", show_header=False, box=None)
+    table.add_row("CUDA disponible", "Sí" if provider.has_cuda() else "No")
+    table.add_row("Filtro VAD", "Activo" if transcriber.vad_available else "Desactivado")
+    missing = [Path(item).name for item in transcriber.missing_vad_assets]
+    table.add_row("Assets VAD faltantes", ", ".join(missing) if missing else "Ninguno")
+    ffmpeg = PATHS.ffmpeg_executable
+    table.add_row("FFmpeg", str(ffmpeg) if ffmpeg else "Detectado automáticamente")
+    table.add_row("Directorio de modelos", str(PATHS.models_dir))
+    table.add_row("Directorio de trabajos", str(PATHS.jobs_dir))
+
+    console.print(table)
+
+
+@doctor_app.command("autotest")
+def doctor_selftest(
+    audio: Optional[Path] = typer.Option(None, help="Archivo de audio para probar. Usa una muestra interna si se omite."),
+    model: str = typer.Option("medium", help="Modelo Whisper a utilizar"),
+    device: str = typer.Option("auto", help="Dispositivo preferido: auto/cpu/cuda"),
+    vad: bool = typer.Option(True, "--vad/--sin-vad", help="Activa o desactiva el filtrado de silencios"),
+    beam_size: int = typer.Option(5, min=1, help="Tamaño de haz para la decodificación"),
+    language: Optional[str] = typer.Option(None, help="Forzar idioma de transcripción"),
+    guardar: Optional[Path] = typer.Option(None, help="Carpeta donde guardar TXT/SRT generados"),
+) -> None:
+    """Ejecuta una transcripción de prueba e informa los resultados."""
+
+    from .api._selftest_audio import SELFTEST_WAV_BASE64
+    from .config import PATHS
+    from .transcription import ModelProvider, OutputWriter, Transcriber
+
+    provider = ModelProvider(PATHS.models_dir)
+    transcriber = Transcriber(provider)
+
+    audio_path: Path
+    if audio is None:
+        diagnostics_dir = PATHS.diagnostics_dir
+        diagnostics_dir.mkdir(parents=True, exist_ok=True)
+        audio_path = diagnostics_dir / "selftest.wav"
+        if not audio_path.exists():
+            audio_path.write_bytes(base64.b64decode(SELFTEST_WAV_BASE64))
+    else:
+        audio_path = audio.expanduser().resolve()
+        if not audio_path.exists():
+            typer.secho(f"No se encontró el archivo {audio_path}", fg="red", err=True)
+            raise typer.Exit(code=1)
+
+    resolved_device = _resolve_device(device, provider)
+    cancel_event = threading.Event()
+
+    try:
+        result = transcriber.transcribe(
+            audio_path,
+            model_name=model,
+            device=resolved_device,
+            language=language,
+            vad_filter=vad,
+            beam_size=beam_size,
+            cancel_event=cancel_event,
+        )
+    except Exception as exc:
+        typer.secho(f"Error durante la transcripción: {exc}", fg="red", err=True)
+        raise typer.Exit(code=1)
+
+    duration = result.segments[-1].end if result.segments else 0.0
+    summary = Table(title="Resultado de la prueba", show_header=False, box=None)
+    summary.add_row("Archivo", str(audio_path))
+    summary.add_row("Modelo", model)
+    summary.add_row("Dispositivo solicitado", device)
+    summary.add_row("Dispositivo usado", result.device)
+    summary.add_row("Duración", f"{duration:.2f} s")
+    summary.add_row("Tiempo de proceso", f"{result.elapsed:.2f} s")
+    summary.add_row("VAD aplicado", "Sí" if result.vad_applied else "No")
+    console.print(summary)
+
+    preview = result.text.strip()
+    if preview:
+        console.print(Panel(preview[:500] + ("…" if len(preview) > 500 else ""), title="Vista previa"))
+
+    if guardar is not None:
+        output_dir = guardar.expanduser().resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        writer = OutputWriter()
+        writer.write_txt(output_dir / "transcripcion.txt", result.text)
+        writer.write_srt(output_dir / "subtitulos.srt", result.segments)
+        typer.secho(f"Archivos guardados en {output_dir}", fg="green")
 
 @app.command("licencia-emitir")
 def cmd_issue(
