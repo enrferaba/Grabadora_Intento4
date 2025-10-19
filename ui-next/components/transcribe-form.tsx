@@ -12,7 +12,8 @@ export function TranscribeForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const file = formData.get("file") as File | null;
     if (!file) {
       setMessage("Selecciona un audio para comenzar");
@@ -31,7 +32,7 @@ export function TranscribeForm() {
         throw new Error("Error al subir el audio");
       }
       setMessage("Trabajo enviado a la cola. Revisa la pestaña Jobs.");
-      event.currentTarget.reset();
+      form.reset();
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
