@@ -395,12 +395,26 @@ class TranscriptorApp:
         ttk.Combobox(container, textvariable=self.lang_var, values=["Auto", "es", "en", "fr", "de", "it", "pt"], state="readonly").grid(row=0, column=3, sticky="ew")
 
         ttk.Label(container, text="Procesamiento:").grid(row=1, column=0, sticky="w", pady=(8, 4))
-        self.device_var = tk.StringVar(value="cuda")
-        ttk.Radiobutton(container, text="GPU", variable=self.device_var, value="cuda").grid(row=1, column=1, sticky="w")
+        cuda_available = self.model_provider.has_cuda()
+        default_device = "cuda" if cuda_available else "cpu"
+        self.device_var = tk.StringVar(value=default_device)
+        gpu_radio = ttk.Radiobutton(container, text="GPU", variable=self.device_var, value="cuda")
+        gpu_radio.grid(row=1, column=1, sticky="w")
         ttk.Radiobutton(container, text="CPU", variable=self.device_var, value="cpu").grid(row=1, column=1, sticky="e")
+        if not cuda_available:
+            gpu_radio.state(["disabled"])
+            self.device_var.set("cpu")
 
-        self.vad_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(container, text="Detectar silencios automáticamente (VAD)", variable=self.vad_var).grid(row=1, column=3, sticky="e")
+        vad_supported = Transcriber.supports_vad()
+        self.vad_var = tk.BooleanVar(value=vad_supported)
+        vad_check = ttk.Checkbutton(
+            container,
+            text="Detectar silencios automáticamente (VAD)",
+            variable=self.vad_var,
+        )
+        vad_check.grid(row=1, column=3, sticky="e")
+        if not vad_supported:
+            vad_check.state(["disabled"])
 
         ttk.Separator(container).grid(row=2, column=0, columnspan=4, sticky="ew", pady=10)
 
@@ -900,7 +914,7 @@ class TranscriptorApp:
             self._set_status(audio.name, "Procesando…", "run")
 
             try:
-                text, segments, elapsed = transcriber.transcribe(
+                result = transcriber.transcribe(
                     audio,
                     model_name=self._selected_model_id(),
                     device=self.device_var.get(),
@@ -923,12 +937,12 @@ class TranscriptorApp:
             destination = self._destination_for(audio)
             txt_path = destination / f"{audio.stem}.txt"
             srt_path = destination / f"{audio.stem}.srt"
-            self.writer.write_txt(txt_path, text)
-            self.writer.write_srt(srt_path, segments)
+            self.writer.write_txt(txt_path, result.text)
+            self.writer.write_srt(srt_path, result.segments)
 
             self._set_status(audio.name, "OK", "ok")
             self.root.after(0, messagebox.showinfo, "Archivos generados", f"TXT: {txt_path}\nSRT: {srt_path}")
-            self.root.after(0, self._show_metrics, elapsed, audio, segments)
+            self.root.after(0, self._show_metrics, result.elapsed, audio, result.segments)
 
         self.root.after(0, self._finish_worker)
 

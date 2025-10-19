@@ -34,7 +34,13 @@ from ..config import ConfigManager, PATHS
 from ..constants import UI_DIST_PATH
 from ..license_service import LicenseManager
 from ..logging_utils import configure_logging
-from ..transcription import GrammarCorrector, ModelProvider, OutputWriter, Segment, Transcriber
+from ..transcription import (
+    GrammarCorrector,
+    ModelProvider,
+    OutputWriter,
+    Segment,
+    Transcriber,
+)
 from ..summarizer import ActionItem, SummaryDocument, SummaryOrchestrator, export_document, get_template
 from ._selftest_audio import SELFTEST_WAV_BASE64
 from .jobs import JobArtifact, JobStatus, JobStore
@@ -82,6 +88,8 @@ class BackendContext:
         self.corrector = GrammarCorrector("es")
         self.transcriber = Transcriber(self.model_provider, self.corrector)
         self.writer = OutputWriter()
+        # Intenta preparar los assets de VAD al iniciar el backend para evitar sorpresas
+        self.transcriber.ensure_vad_assets()
 
     def device_for(self, device: str) -> str:
         if device not in {"cpu", "cuda", "auto"}:
@@ -132,6 +140,7 @@ def _diagnostic_snapshot() -> Dict[str, Any]:
         "license": license_status,
         "hardware": {
             "cuda": CONTEXT.model_provider.has_cuda(),
+            "vad_assets": CONTEXT.transcriber.vad_available,
             "ffmpeg": str(PATHS.ffmpeg_executable) if PATHS.ffmpeg_executable else None,
         },
         "jobs": {
@@ -164,7 +173,7 @@ def _run_selftest(model_name: str | None = None) -> Dict[str, Any]:
 
     audio_path = _decode_selftest_audio()
     cancel_event = threading.Event()
-    text, segments, elapsed = CONTEXT.transcriber.transcribe(
+    result = CONTEXT.transcriber.transcribe(
         audio_path,
         model_name=model_name,
         device=CONTEXT.device_for("auto"),
@@ -173,12 +182,14 @@ def _run_selftest(model_name: str | None = None) -> Dict[str, Any]:
         beam_size=1,
         cancel_event=cancel_event,
     )
-    duration = segments[-1].end if segments else 0.0
+    duration = result.segments[-1].end if result.segments else 0.0
     return {
         "model": model_name,
-        "elapsed": elapsed,
+        "elapsed": result.elapsed,
         "duration": duration,
-        "text": text.strip(),
+        "text": result.text.strip(),
+        "device": result.device,
+        "vad_applied": result.vad_applied,
     }
 
 
@@ -190,7 +201,19 @@ def create_app() -> FastAPI:
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         status_payload = CONTEXT.license.status().as_dict()
-        return HealthResponse(status="ok", time=datetime.utcnow(), version=__version__, license=status_payload)
+        cuda_available = CONTEXT.model_provider.has_cuda()
+        vad_available = CONTEXT.transcriber.vad_available
+        degraded = (not cuda_available) or (not vad_available)
+        return HealthResponse(
+            status="degraded" if degraded else "ok",
+            time=datetime.utcnow(),
+            version=__version__,
+            license=status_payload,
+            cuda_available=cuda_available,
+            vad_available=vad_available,
+            missing_vad_assets=list(CONTEXT.transcriber.missing_vad_assets),
+            ffmpeg_path=str(PATHS.ffmpeg_executable) if PATHS.ffmpeg_executable else None,
+        )
 
     # ------------------------------------------------------------------
     def _normalise_suffix(filename: str | None) -> str:
@@ -255,7 +278,7 @@ def create_app() -> FastAPI:
             CONTEXT.jobs.set_progress(job_id, percent, eta_seconds=eta)
 
         try:
-            text, segments, elapsed = await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 CONTEXT.transcriber.transcribe,
                 audio_path,
                 model_name=options["model"],
@@ -267,10 +290,22 @@ def create_app() -> FastAPI:
                 on_progress=_on_progress,
             )
 
+            text = result.text
+            segments = result.segments
+            elapsed = result.elapsed
+
             CONTEXT.jobs.set_progress(job_id, 100.0, eta_seconds=0.0)
             duration = segments[-1].end if segments else None
             CONTEXT.jobs.mark_duration(job_id, duration)
-            CONTEXT.jobs.add_metadata(job_id, elapsed_seconds=elapsed)
+            metadata: Dict[str, Any] = {
+                "elapsed_seconds": elapsed,
+                "actual_device": result.device,
+                "vad_applied": result.vad_applied,
+            }
+            if options.get("vad", True) and not result.vad_applied:
+                metadata["vad_reason"] = "missing_vad_assets"
+                metadata["missing_vad_assets"] = list(CONTEXT.transcriber.missing_vad_assets)
+            CONTEXT.jobs.add_metadata(job_id, **metadata)
 
             job_dir = PATHS.jobs_dir / job_id
             transcript_path = job_dir / "transcripcion.txt"
@@ -328,24 +363,45 @@ def create_app() -> FastAPI:
         beam_size: int = Form(5),
         language: str | None = Form(None),
     ) -> TranscriptionJobResponse:
+        requested_device = device
         resolved_device = CONTEXT.device_for(device)
+        requested_vad = vad
+        effective_vad = vad and CONTEXT.transcriber.vad_available
         job = CONTEXT.jobs.create(
             filename=file.filename or "archivo",
             model=model,
             device=resolved_device,
-            vad=vad,
+            vad=effective_vad,
             beam_size=beam_size,
             language=language,
         )
         CONTEXT.jobs.prune(retention_days=CONTEXT.config.retention_days())
         audio_path = await _persist_upload(job.id, file)
-        background.add_task(_run_transcription, job.id, audio_path, {
-            "model": model,
-            "device": resolved_device,
-            "vad": vad,
-            "beam_size": beam_size,
-            "language": language,
-        })
+        metadata: Dict[str, Any] = {
+            "requested_device": requested_device,
+            "requested_vad": requested_vad,
+        }
+        if requested_device != resolved_device:
+            metadata["device_warning"] = "CUDA no disponible; se utilizará CPU"
+        if requested_vad and not effective_vad:
+            metadata["vad_warning"] = (
+                "Faltan los assets de VAD (Silero). El filtrado de silencios se desactivó automáticamente."
+            )
+        if metadata:
+            CONTEXT.jobs.add_metadata(job.id, **metadata)
+
+        background.add_task(
+            _run_transcription,
+            job.id,
+            audio_path,
+            {
+                "model": model,
+                "device": resolved_device,
+                "vad": effective_vad,
+                "beam_size": beam_size,
+                "language": language,
+            },
+        )
         return TranscriptionJobResponse(**job.as_dict())
 
     @app.get("/jobs", response_model=JobsEnvelope)

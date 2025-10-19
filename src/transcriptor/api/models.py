@@ -12,6 +12,10 @@ class HealthResponse(BaseModel):
     time: datetime = Field(default_factory=datetime.utcnow)
     version: str
     license: Dict[str, Any]
+    cuda_available: bool = False
+    vad_available: bool = False
+    missing_vad_assets: List[str] = Field(default_factory=list)
+    ffmpeg_path: Optional[str] = None
 
 
 class TranscriptionJobResponse(BaseModel):
