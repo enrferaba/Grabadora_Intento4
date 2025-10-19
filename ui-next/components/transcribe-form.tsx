@@ -12,11 +12,12 @@ export function TranscribeForm() {
   const [vad, setVad] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const file = fileInputRef.current?.files?.[0] ?? null;
+    const file = selectedFile;
     if (!file) {
       setMessage("Selecciona un audio para comenzar");
       return;
@@ -45,9 +46,15 @@ export function TranscribeForm() {
 
       formRef.current?.reset();
       if (fileInputRef.current) fileInputRef.current.value = "";
+      setSelectedFile(null);
       setDevice("auto");
       setVad(true);
     }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.currentTarget.files?.[0] ?? null;
+    setSelectedFile(file);
   }
 
   return (
@@ -63,7 +70,7 @@ export function TranscribeForm() {
           type="file"
           name="file"
           accept="audio/*,video/*"
-          ref={fileInputRef}
+          onChange={handleFileChange}
           className="mt-2 w-full rounded border border-dashed border-zinc-700 bg-zinc-950 px-4 py-6 text-sm text-zinc-400 file:hidden"
         />
         <p className="mt-2 text-xs text-zinc-500">
